@@ -19,6 +19,7 @@
 // #include "MCASHMap.hpp"
 #include "MontageMSQueue.hpp"
 #include "MontageQueue.hpp"
+#include "HTMQueue.hpp"
 #include "MODQueue.hpp"
 #include "Queue.hpp"
 #include "MSQueue.hpp"
@@ -117,6 +118,7 @@ int main(int argc, char *argv[])
 	gtc.addRideableOption(new QueueFactory<string,PLACE_DRAM>(), "TransientQueue<DRAM>");
 	gtc.addRideableOption(new QueueFactory<string,PLACE_NVM>(), "TransientQueue<NVM>");
 	gtc.addRideableOption(new MontageQueueFactory<string>(), "MontageQueue");
+	gtc.addRideableOption(new HTMQueueFactory<string>(), "HTMQueue");
 	gtc.addRideableOption(new MODQueueFactory(), "MODQueue");
 
 	/* mappings */
