@@ -1,6 +1,10 @@
 #!/bin/sh
 
 set -e
+if [ $# -le 0 ]; then
+    echo "Run: $0 -h for usage"
+    exit 1
+fi
 while [ $# -gt 0 ]; do
     case "$1" in
         -h)

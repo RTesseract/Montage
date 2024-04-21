@@ -3,35 +3,24 @@
 
 #include <immintrin.h>
 
+extern const int htmMaxRetriesLeft;
+extern const unsigned htmMaxPauseTimes;
+
 class GlobalLock
 {
 private:
-    volatile int _flag = false;
-    volatile int *flag = &_flag;
+    volatile bool flag = false;
 public:
-    void lock()
-    {
-        while (1) {
-            if (*flag) {
-                __asm__ __volatile__("pause;");
-                continue;
-            }
-            if (__sync_bool_compare_and_swap(flag, false, true)) {
-                return;
-            }
-        }
-    }
-
-    void unlock()
-    {
-        __asm__ __volatile__("" ::: "memory");
-        *flag = false;
-    }
-
-    bool isLocked()
-    {
-        return *flag;
-    }
+    void lock();
+    void unlock();
+    bool isLocked() const;
 };
+
+inline void htmSpinWait(GlobalLock &lock)
+{
+    while (lock.isLocked())
+        for (unsigned htmPauseTimes = 0; htmPauseTimes < htmMaxPauseTimes; ++htmPauseTimes)
+            _mm_pause();
+}
 
 #endif // HTM_HPP

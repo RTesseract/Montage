@@ -88,17 +88,16 @@ public:
 template<typename T>
 void HTMQueue<T>::enqueue(T val, int tid){
     /* critical section begin */
-    Node* new_node = new Node(this, val);
     MontageOpHolder _holder(this);
+    Node* new_node = new Node(this, val);
     /* critical section end */
-
-    int retriesLeft = 35;
-    unsigned int status;
-retry:
-    status = _xbegin();
-    if (status == _XBEGIN_STARTED)
+    int htmRetriesLeft = htmMaxRetriesLeft;
+    unsigned int htmStatus;
+    htmRetry:
+    htmStatus = _xbegin();
+    if (htmStatus == _XBEGIN_STARTED)
     {
-        if (lock.isLocked()) _xabort(0);
+        if (lock.isLocked()) _xabort(_XABORT_EXPLICIT);
         /* critical section begin */
         new_node->set_sn(global_sn);
         global_sn++;
@@ -114,10 +113,8 @@ retry:
     }
     else
     {
-        while (lock.isLocked())
-            for (int __pc = 0; __pc < 16; ++__pc)
-                _mm_pause();
-        if (--retriesLeft > 0) goto retry;
+        htmSpinWait(lock);
+        if (--htmRetriesLeft > 0) goto htmRetry;
         lock.lock();
         /* critical section begin */
         new_node->set_sn(global_sn);
@@ -137,17 +134,16 @@ retry:
 template<typename T>
 optional<T> HTMQueue<T>::dequeue(int tid){
     /* critical section begin */
-    optional<T> res = {};
     MontageOpHolder _holder(this);
+    optional<T> res = {};
     /* critical section end */
-
-    int retriesLeft = 35;
-    unsigned int status;
-retry:
-    status = _xbegin();
-    if (status == _XBEGIN_STARTED)
+    int htmRetriesLeft = htmMaxRetriesLeft;
+    unsigned int htmStatus;
+    htmRetry:
+    htmStatus = _xbegin();
+    if (htmStatus == _XBEGIN_STARTED)
     {
-        if (lock.isLocked()) _xabort(0);
+        if (lock.isLocked()) _xabort(_XABORT_EXPLICIT);
         /* critical section begin */
         if(head == nullptr) {
             _xend();
@@ -163,15 +159,12 @@ retry:
         /* critical section begin */
         res = tmp->get_val();
         delete(tmp);
-        return res;
         /* critical section end */
     }
     else
     {
-        while (lock.isLocked())
-            for (int __pc = 0; __pc < 16; ++__pc)
-                _mm_pause();
-        if (--retriesLeft > 0) goto retry;
+        htmSpinWait(lock);
+        if (--htmRetriesLeft > 0) goto htmRetry;
         lock.lock();
         /* critical section begin */
         if(head == nullptr) {
@@ -184,13 +177,11 @@ retry:
         if(head == nullptr) {
             tail = nullptr;
         }
+        delete(tmp);
         /* critical section end */
         lock.unlock();
-        /* critical section begin */
-        delete(tmp);
-        return res;
-        /* critical section end */
     }
+    return res;
 }
 
 template <class T> 

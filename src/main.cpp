@@ -31,6 +31,7 @@
 // #include "HOHHashTable.hpp"
 #include "HashTable.hpp"
 #include "MontageHashTable.hpp"
+#include "HTMHashTable.hpp"
 #include "UnbalancedTree.hpp"
 #include "SOFTHashTable.hpp"
 #include "NVMSOFTHashTable.hpp"
@@ -65,6 +66,7 @@
 #include "NVMGraph.hpp"
 // #include "DLGraph.hpp"
 #include "MontageGraph.hpp"
+#include "HTMGraph.hpp"
 #endif
 
 #ifdef MNEMOSYNE
@@ -80,7 +82,7 @@
 #include "QueueTest.hpp"
 #include "KVTest.hpp"
 #include "YCSBTest.hpp"
-// #include "GraphTest.hpp"
+#include "GraphTest.hpp"
 
 #include "MapVerify.hpp"
 #include "QueueChurnTest.hpp"
@@ -139,6 +141,7 @@ int main(int argc, char *argv[])
 	gtc.addRideableOption(new HashTableFactory<string,PLACE_DRAM>(), "TransientHashTable<DRAM>");
 	gtc.addRideableOption(new HashTableFactory<string,PLACE_NVM>(), "TransientHashTable<NVM>");
 	gtc.addRideableOption(new MontageHashTableFactory<string>(), "MontageHashTable");
+	gtc.addRideableOption(new HTMHashTableFactory<string>(), "HTMHashTable");
 
 	gtc.addRideableOption(new PNatarajanTreeFactory(), "PNataTree");
 	gtc.addRideableOption(new MontageNatarajanTreeFactory<string>(), "MontageNataTree");
@@ -154,6 +157,7 @@ int main(int argc, char *argv[])
 	gtc.addRideableOption(new NVMGraphFactory<numVertices, meanEdgesPerVertex, vertexLoad>(), "NVMGraph");
 	// gtc.addRideableOption(new DLGraphFactory<numVertices>(), "DLGraph");
 	gtc.addRideableOption(new MontageGraphFactory<numVertices, meanEdgesPerVertex, vertexLoad>(), "MontageGraph");
+	gtc.addRideableOption(new HTMGraphFactory<numVertices, meanEdgesPerVertex, vertexLoad>(), "HTMGraph");
 
     gtc.addRideableOption(new MontageGraphFactory<3072627>(), "Orkut");
     gtc.addRideableOption(new TGraphFactory<3076727, 0, 100>(), "TransientOrkut");
@@ -190,8 +194,8 @@ int main(int argc, char *argv[])
 #ifndef MNEMOSYNE
 	gtc.addTestOption(new RecoverVerifyTest<string,string>(&gtc), "RecoverVerifyTest");
 
-	// gtc.addTestOption(new GraphTest(numVertices, meanEdgesPerVertex,vertexLoad,8000), "GraphTest:80edge20vertex:degree32");
-	// gtc.addTestOption(new GraphTest(numVertices, meanEdgesPerVertex,vertexLoad,9980), "GraphTest:99.8edge.2vertex:degree32");
+	gtc.addTestOption(new GraphTest(numVertices, meanEdgesPerVertex,vertexLoad,8000), "GraphTest:80edge20vertex:degree32");
+	gtc.addTestOption(new GraphTest(numVertices, meanEdgesPerVertex,vertexLoad,9980), "GraphTest:99.8edge.2vertex:degree32");
 	// gtc.addTestOption(new GraphRecoveryTest("graph_data/", "orkut-edge-list_", 28610, 5, true), "GraphRecoveryTest:Orkut:verify");
     gtc.addTestOption(new GraphRecoveryTest(&gtc, "graph_data/", "orkut-edge-list_", 28610, 5, false), "GraphRecoveryTest:Orkut:noverify");
     gtc.addTestOption(new TGraphConstructionTest("graph_data/", "orkut-edge-list_", 28610, 5), "TGraphConstructionTest:Orkut");
