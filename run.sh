@@ -32,11 +32,15 @@ while [ $# -gt 0 ]; do
             shift 4
             ;;
         -rt)
-            for i in $(seq 1 "$4"); do
-                rm -rf /mnt/pmem/"$USER"*
-                ./bin/main -r "$2" -m "$3" -t "$i"
+            threads=$(seq 1 "$4")
+            it_num=$(seq 1 "$5")
+            for _ in $it_num; do
+                for i in $threads; do
+                    rm -rf /mnt/pmem/"$USER"*
+                    ./bin/main -r "$2" -m "$3" -t "$i"
+                done
             done
-            shift 4
+            shift 5
             ;;
         *)
             echo "Run: $0 -h for usage"

@@ -63,7 +63,7 @@ PRONTO_PATH = ./ext/pronto-v1.1
 MNEMOSYNE_PATH = ./ext/mnemosyne-gcc
 LIBITM_PATH = ./ext/libitm
 # list of directories which contain headers (include directories)
-IDIRS:=./src ./src/utils ./src/rideables ./src/tests ./src/persist ./src/persist/api
+IDIRS:=../boost_1_85_0 ./src ./src/utils ./src/rideables ./src/tests ./src/persist ./src/persist/api
 IDIRS+=./ext/ralloc/src
 IDIRS+=$(IMMER_DIR) $(NVM_MALLOC_DIR)/src/ 
 
