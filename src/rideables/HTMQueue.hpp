@@ -88,8 +88,8 @@ public:
 template<typename T>
 void HTMQueue<T>::enqueue(T val, int tid){
     /* section begin */
-    MontageOpHolder _holder(this);
     Node* new_node = new Node(this, val);
+    MontageOpHolder _holder(this);
     /* section end */
     int htmRetriesLeft = htmMaxRetriesLeft;
     unsigned int htmStatus;
@@ -134,8 +134,8 @@ void HTMQueue<T>::enqueue(T val, int tid){
 template<typename T>
 optional<T> HTMQueue<T>::dequeue(int tid){
     /* section begin */
-    MontageOpHolder _holder(this);
     optional<T> res = {};
+    MontageOpHolder _holder(this);
     /* section end */
     int htmRetriesLeft = htmMaxRetriesLeft;
     unsigned int htmStatus;

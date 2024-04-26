@@ -282,20 +282,47 @@ class HTMGraph : public RGraph, public Recoverable{
         }
 
         bool has_edge(int src, int dest) {
-            bool retval = false;            
-            // We utilize `get_unsafe` API because the Relation destination and vertex id will not change at all.
-            lock(src);
-            if (vertex(src) == nullptr) {
-                unlock(src);
-                return false;
-            }
-
+            /* section begin */
+            bool retval = false;
+            /* section end */
+            int htmRetriesLeft = htmMaxRetriesLeft;
+            unsigned int htmStatus;
+            htmRetry:
+            htmStatus = _xbegin();
+            if (htmStatus == _XBEGIN_STARTED)
             {
-                MontageOpHolder _holder(this);
-                auto r = make_pair(src, dest);
-                retval = has_relation(source(src), r);
+                if (isLocked(src)) _xabort(_XABORT_EXPLICIT);
+                /* section begin */
+                if (vertex(src) == nullptr) {
+                    _xend();
+                    return false;
+                }
+                {
+                    MontageOpHolder _holder(this);
+                    auto r = make_pair(src, dest);
+                    retval = has_relation(source(src), r);
+                }
+                /* section end */
+                _xend();
             }
-            unlock(src);
+            else
+            {
+                htmSpinWait(src);
+                if (--htmRetriesLeft > 0) goto htmRetry;
+                lock(src);
+                /* section begin */
+                if (vertex(src) == nullptr) {
+                    unlock(src);
+                    return false;
+                }
+                {
+                    MontageOpHolder _holder(this);
+                    auto r = make_pair(src, dest);
+                    retval = has_relation(source(src), r);
+                }
+                /* section end */
+                unlock(src);
+            }
             return retval;
         }
 
@@ -306,35 +333,67 @@ class HTMGraph : public RGraph, public Recoverable{
          * @return True if the edge exists
          */
         bool remove_edge(int src, int dest) {
+            /* section begin */
             if (src == dest) return false;
-            if (src > dest) {
-                lock(dest);
-                lock(src);
-            } else {
-                lock(src);
-                lock(dest);
-            }
             bool ret = false;
-            if (vertex(src) != nullptr && vertex(dest) != nullptr) {
-                MontageOpHolder _holder(this);
-                auto r = make_pair(src, dest);
-                auto ret1 = remove_relation(source(src), r);
-                auto ret2 = remove_relation(destination(dest), r);
-                assert(ret1==ret2);
-                ret = (ret1!=nullptr);
-                if(ret){
-                    pdelete(ret1);
-                    inc_seq(src);
-                    inc_seq(dest);
+            /* section end */
+            int htmRetriesLeft = htmMaxRetriesLeft;
+            unsigned int htmStatus;
+            htmRetry:
+            htmStatus = _xbegin();
+            if (htmStatus == _XBEGIN_STARTED)
+            {
+                if (isLocked(src) || isLocked(dest)) _xabort(_XABORT_EXPLICIT);
+                /* section begin */
+                if (vertex(src) != nullptr && vertex(dest) != nullptr) {
+                    MontageOpHolder _holder(this);
+                    auto r = make_pair(src, dest);
+                    auto ret1 = remove_relation(source(src), r);
+                    auto ret2 = remove_relation(destination(dest), r);
+                    assert(ret1==ret2);
+                    ret = (ret1!=nullptr);
+                    if(ret){
+                        pdelete(ret1);
+                        inc_seq(src);
+                        inc_seq(dest);
+                    }
                 }
+                /* section end */
+                _xend();
             }
-            
-            if (src > dest) {
-                unlock(src);
-                unlock(dest);
-            } else {
-                unlock(dest);
-                unlock(src);
+            else
+            {
+                htmSpinWait2(src, dest);
+                if (--htmRetriesLeft > 0) goto htmRetry;
+                if (src > dest) {
+                    lock(dest);
+                    lock(src);
+                } else {
+                    lock(src);
+                    lock(dest);
+                }
+                /* section begin */
+                if (vertex(src) != nullptr && vertex(dest) != nullptr) {
+                    MontageOpHolder _holder(this);
+                    auto r = make_pair(src, dest);
+                    auto ret1 = remove_relation(source(src), r);
+                    auto ret2 = remove_relation(destination(dest), r);
+                    assert(ret1==ret2);
+                    ret = (ret1!=nullptr);
+                    if(ret){
+                        pdelete(ret1);
+                        inc_seq(src);
+                        inc_seq(dest);
+                    }
+                }
+                /* section end */
+                if (src > dest) {
+                    unlock(src);
+                    unlock(dest);
+                } else {
+                    unlock(dest);
+                    unlock(src);
+                }
             }
             return ret;
         }
@@ -536,10 +595,10 @@ class HTMGraph : public RGraph, public Recoverable{
 	}
 
         bool add_vertex(int vid) {
+            /* section begin */
             std::mt19937_64 vertexGen(time(NULL));
             std::uniform_int_distribution<> uniformVertex(0,numVertices);
             bool retval = true;
-            // Randomly sample vertices...
             std::vector<int> vec;
             for (int i = 0; i < meanEdgesPerVertex * 100 / vertexLoad; i++) {
                 int u = uniformVertex(vertexGen);
@@ -551,31 +610,61 @@ class HTMGraph : public RGraph, public Recoverable{
             vec.push_back(vid);
             std::sort(vec.begin(), vec.end()); 
             vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
-
             auto new_v = new tVertex(this, vid, vid);
-            for (int u : vec) {
-                lock(u);
-            }
-
-            if (vertex(vid) == nullptr) {
-                MontageOpHolder _holder(this);
-                vertex(vid) = new_v;
-                for (int u : vec) {
-                    if (vertex(u) == nullptr) continue;
-                    if (u == vid) continue;
-                    Relation *r = pnew<Relation>(vid, u, -1);
-                    auto p = make_pair(vid, u);
-                    source(vid).emplace(p,r);
-                    destination(u).emplace(p,r);
+            /* section end */
+            int htmRetriesLeft = htmMaxRetriesLeft;
+            unsigned int htmStatus;
+            htmRetry:
+            htmStatus = _xbegin();
+            if (htmStatus == _XBEGIN_STARTED)
+            {
+                if (isLocked(vec)) _xabort(_XABORT_EXPLICIT);
+                /* section begin */
+                if (vertex(vid) == nullptr) {
+                    MontageOpHolder _holder(this);
+                    vertex(vid) = new_v;
+                    for (int u : vec) {
+                        if (vertex(u) == nullptr) continue;
+                        if (u == vid) continue;
+                        Relation *r = pnew<Relation>(vid, u, -1);
+                        auto p = make_pair(vid, u);
+                        source(vid).emplace(p,r);
+                        destination(u).emplace(p,r);
+                    }
+                } else {
+                    retval = false;
                 }
-            } else {
-                retval = false;
+                /* section end */
+                _xend();
+            }
+            else
+            {
+                htmSpinWaitN(vec);
+                if (--htmRetriesLeft > 0) goto htmRetry;
+                for (int u : vec)
+                    lock(u);
+                /* section begin */
+                if (vertex(vid) == nullptr) {
+                    MontageOpHolder _holder(this);
+                    vertex(vid) = new_v;
+                    for (int u : vec) {
+                        if (vertex(u) == nullptr) continue;
+                        if (u == vid) continue;
+                        Relation *r = pnew<Relation>(vid, u, -1);
+                        auto p = make_pair(vid, u);
+                        source(vid).emplace(p,r);
+                        destination(u).emplace(p,r);
+                    }
+                } else {
+                    retval = false;
+                }
+                /* section end */
+                for (auto u = vec.rbegin(); u != vec.rend(); u++) {
+                    if (vertex(vid) != nullptr && vertex(*u) != nullptr) inc_seq(*u);
+                    unlock(*u);
+                }
             }
 
-            for (auto u = vec.rbegin(); u != vec.rend(); u++) {
-                if (vertex(vid) != nullptr && vertex(*u) != nullptr) inc_seq(*u);
-                unlock(*u);
-            }
             if(retval==false){
                 delete(new_v);
             }
@@ -584,57 +673,76 @@ class HTMGraph : public RGraph, public Recoverable{
 
 
         bool remove_vertex(int vid) {
-startOver:
+            /* section begin */
+            startOver:
+            std::vector<int> vertices;
+            uint32_t seq;
+            /* section end */
+            int htmRetriesLeft = htmMaxRetriesLeft;
+            unsigned int htmStatus;
+            htmRetry1:
+            htmStatus = _xbegin();
+            if (htmStatus == _XBEGIN_STARTED)
             {
-                // Step 1: Acquire vertex and collect neighbors...
-                std::vector<int> vertices;
-                lock(vid);
+                if (isLocked(vid)) _xabort(_XABORT_EXPLICIT);
+                /* section begin */
                 if (vertex(vid) == nullptr) {
                     unlock(vid);
                     return false;
                 }
-                uint32_t seq = get_seq(vid);
-                for (auto r : source(vid)) {
+                seq = get_seq(vid);
+                for (auto r : source(vid))
                     vertices.push_back(r.second->dest());
-                }
-                for (auto r : destination(vid)) {
+                for (auto r : destination(vid))
                     vertices.push_back(r.second->src());
+                /* section end */
+                _xend();
+            }
+            else
+            {
+                htmSpinWait(vid);
+                if (--htmRetriesLeft > 0) goto htmRetry1;
+                lock(vid);
+                /* section begin */
+                if (vertex(vid) == nullptr) {
+                    unlock(vid);
+                    return false;
                 }
-                
+                seq = get_seq(vid);
+                for (auto r : source(vid))
+                    vertices.push_back(r.second->dest());
+                for (auto r : destination(vid))
+                    vertices.push_back(r.second->src());
+                /* section end */
                 unlock(vid);
-                vertices.push_back(vid);
-                std::sort(vertices.begin(), vertices.end()); 
-                vertices.erase(std::unique(vertices.begin(), vertices.end()), vertices.end());
+            }
 
+            vertices.push_back(vid);
+            std::sort(vertices.begin(), vertices.end()); 
+            vertices.erase(std::unique(vertices.begin(), vertices.end()), vertices.end());
 
-                // Step 2: Acquire lock-order...
-                for (int _vid : vertices) {
-                    lock(_vid);
-                    if (vertex(_vid) == nullptr && get_seq(vid) == seq) {
-                        for (auto r : source(vid)) {
-                            if (r.second->dest() == _vid)
-                            std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
-                        }
-                        for (auto r : destination(vid)) {
-                            if (r.second->src() == _vid)
-                            std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
-                        }
-                        std::abort();
+            for (int _vid : vertices) {
+                lock(_vid);
+                if (vertex(_vid) == nullptr && get_seq(vid) == seq) {
+                    for (auto r : source(vid)) {
+                        if (r.second->dest() == _vid)
+                        std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
                     }
-                }
-
-                // Has vertex been changed? Start over
-                if (get_seq(vid) != seq) {
-                    for (auto _vid = vertices.rbegin(); _vid != vertices.rend(); _vid++) {
-                        unlock(*_vid);
+                    for (auto r : destination(vid)) {
+                        if (r.second->src() == _vid)
+                        std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
                     }
-                    goto startOver;
+                    std::abort();
                 }
+            }
 
-                // Has not changed, continue...
-                // Step 3: Remove edges from all other
-                // vertices that relate to this vertex
-                {
+            if (get_seq(vid) != seq) {
+                for (auto _vid = vertices.rbegin(); _vid != vertices.rend(); _vid++)
+                    unlock(*_vid);
+                goto startOver;
+            }
+
+            {
                 MontageOpHolder _holder(this);
                 for (int other : vertices) {
                     if (other == vid) continue;
@@ -677,13 +785,11 @@ startOver:
                 source(vid).clear();
                 destination(vid).clear();
                 destroy(vid);
-                }
-                
-                // Step 4: Release in reverse order
-                for (auto _vid = vertices.rbegin(); _vid != vertices.rend(); _vid++) {
-                    inc_seq(*_vid);
-                    unlock(*_vid);
-                }
+            }
+            
+            for (auto _vid = vertices.rbegin(); _vid != vertices.rend(); _vid++) {
+                inc_seq(*_vid);
+                unlock(*_vid);
             }
             return true;
         }
@@ -705,9 +811,29 @@ startOver:
                 return vMeta[idx].vertexLocks.isLocked();
             }
 
+            bool isLocked(std::vector<int> &vec) {
+                for (int i : vec)
+                    if (isLocked(i)) return true;
+                return false;
+            }
+
+            inline void htmSpinWait(size_t idx)
+            {
+                while (isLocked(idx))
+                    for (unsigned htmPauseTimes = 0; htmPauseTimes < htmMaxPauseTimes; ++htmPauseTimes)
+                        _mm_pause();
+            }
+
             inline void htmSpinWait2(size_t idx1, size_t idx2)
             {
                 while (isLocked(idx1) || isLocked(idx2))
+                    for (unsigned htmPauseTimes = 0; htmPauseTimes < htmMaxPauseTimes; ++htmPauseTimes)
+                        _mm_pause();
+            }
+
+            inline void htmSpinWaitN(std::vector<int> &vec)
+            {
+                while (isLocked(vec))
                     for (unsigned htmPauseTimes = 0; htmPauseTimes < htmMaxPauseTimes; ++htmPauseTimes)
                         _mm_pause();
             }

@@ -81,8 +81,8 @@ public:
 
     optional<V> get(K key, int tid){
         /* section begin */
-        MontageOpHolderReadOnly(this);
         size_t idx=hash_fn(key)%idxSize;
+        MontageOpHolderReadOnly(this);
         /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
@@ -196,9 +196,9 @@ public:
 
     bool insert(K key, V val, int tid){
         /* section begin */
-        MontageOpHolder _holder(this);
         size_t idx=hash_fn(key)%idxSize;
         ListNode* new_node = new ListNode(this, key, val);
+        MontageOpHolder _holder(this);
         /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
@@ -268,8 +268,8 @@ public:
 
     optional<V> remove(K key, int tid){
         /* section begin */
-        MontageOpHolder _holder(this);
         size_t idx=hash_fn(key)%idxSize;
+        MontageOpHolder _holder(this);
         /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
