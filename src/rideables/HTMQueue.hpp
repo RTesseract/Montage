@@ -87,10 +87,10 @@ public:
 
 template<typename T>
 void HTMQueue<T>::enqueue(T val, int tid){
-    /* critical section begin */
+    /* section begin */
     MontageOpHolder _holder(this);
     Node* new_node = new Node(this, val);
-    /* critical section end */
+    /* section end */
     int htmRetriesLeft = htmMaxRetriesLeft;
     unsigned int htmStatus;
     htmRetry:
@@ -98,7 +98,7 @@ void HTMQueue<T>::enqueue(T val, int tid){
     if (htmStatus == _XBEGIN_STARTED)
     {
         if (lock.isLocked()) _xabort(_XABORT_EXPLICIT);
-        /* critical section begin */
+        /* section begin */
         new_node->set_sn(global_sn);
         global_sn++;
         if(tail == nullptr) {
@@ -108,7 +108,7 @@ void HTMQueue<T>::enqueue(T val, int tid){
         }
         tail->next = new_node;
         tail = new_node;
-        /* critical section end */
+        /* section end */
         _xend();
     }
     else
@@ -116,7 +116,7 @@ void HTMQueue<T>::enqueue(T val, int tid){
         htmSpinWait(lock);
         if (--htmRetriesLeft > 0) goto htmRetry;
         lock.lock();
-        /* critical section begin */
+        /* section begin */
         new_node->set_sn(global_sn);
         global_sn++;
         if(tail == nullptr) {
@@ -126,17 +126,17 @@ void HTMQueue<T>::enqueue(T val, int tid){
         }
         tail->next = new_node;
         tail = new_node;
-        /* critical section end */
+        /* section end */
         lock.unlock();
     }
 }
 
 template<typename T>
 optional<T> HTMQueue<T>::dequeue(int tid){
-    /* critical section begin */
+    /* section begin */
     MontageOpHolder _holder(this);
     optional<T> res = {};
-    /* critical section end */
+    /* section end */
     int htmRetriesLeft = htmMaxRetriesLeft;
     unsigned int htmStatus;
     htmRetry:
@@ -144,7 +144,7 @@ optional<T> HTMQueue<T>::dequeue(int tid){
     if (htmStatus == _XBEGIN_STARTED)
     {
         if (lock.isLocked()) _xabort(_XABORT_EXPLICIT);
-        /* critical section begin */
+        /* section begin */
         if(head == nullptr) {
             _xend();
             return res;
@@ -154,19 +154,19 @@ optional<T> HTMQueue<T>::dequeue(int tid){
         if(head == nullptr) {
             tail = nullptr;
         }
-        /* critical section end */
+        /* section end */
         _xend();
-        /* critical section begin */
+        /* section begin */
         res = tmp->get_val();
         delete(tmp);
-        /* critical section end */
+        /* section end */
     }
     else
     {
         htmSpinWait(lock);
         if (--htmRetriesLeft > 0) goto htmRetry;
         lock.lock();
-        /* critical section begin */
+        /* section begin */
         if(head == nullptr) {
             lock.unlock();
             return res;
@@ -178,7 +178,7 @@ optional<T> HTMQueue<T>::dequeue(int tid){
             tail = nullptr;
         }
         delete(tmp);
-        /* critical section end */
+        /* section end */
         lock.unlock();
     }
     return res;

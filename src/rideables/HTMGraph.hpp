@@ -208,12 +208,12 @@ class HTMGraph : public RGraph, public Recoverable{
          * @return Whether or not adding the edge was successful
          */
         bool add_edge(int src, int dest, int weight) {
-            /* critical section begin */
+            /* section begin */
             bool retval = false;
             Relation *r = pnew<Relation>(src,dest,weight);
             auto p = make_pair(src,dest);
             if (src == dest) return false;
-            /* critical section end */
+            /* section end */
             int htmRetriesLeft = htmMaxRetriesLeft;
             unsigned int htmStatus;
             htmRetry:
@@ -221,7 +221,7 @@ class HTMGraph : public RGraph, public Recoverable{
             if (htmStatus == _XBEGIN_STARTED)
             {
                 if (isLocked(src) || isLocked(dest)) _xabort(_XABORT_EXPLICIT);
-                /* critical section begin */
+                /* section begin */
                 auto& srcSet = source(src);
                 auto& destSet = destination(dest);
                 if (vertex(src) != nullptr && vertex(dest) != nullptr) {
@@ -238,7 +238,7 @@ class HTMGraph : public RGraph, public Recoverable{
                     }
                 }
                 if (!retval) pdelete(r);
-                /* critical section end */
+                /* section end */
                 _xend();
             }
             else
@@ -252,7 +252,7 @@ class HTMGraph : public RGraph, public Recoverable{
                     lock(src);
                     lock(dest);
                 }
-                /* critical section begin */
+                /* section begin */
                 auto& srcSet = source(src);
                 auto& destSet = destination(dest);
                 if (vertex(src) != nullptr && vertex(dest) != nullptr) {
@@ -269,7 +269,7 @@ class HTMGraph : public RGraph, public Recoverable{
                     }
                 }
                 if (!retval) pdelete(r);
-                /* critical section end */
+                /* section end */
                 if (src > dest) {
                     unlock(src);
                     unlock(dest);

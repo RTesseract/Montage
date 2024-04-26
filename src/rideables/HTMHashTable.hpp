@@ -80,10 +80,10 @@ public:
     }
 
     optional<V> get(K key, int tid){
-        /* critical section begin */
+        /* section begin */
         MontageOpHolderReadOnly(this);
         size_t idx=hash_fn(key)%idxSize;
-        /* critical section end */
+        /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
         htmRetry:
@@ -91,7 +91,7 @@ public:
         if (htmStatus == _XBEGIN_STARTED)
         {
             if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
-            /* critical section begin */
+            /* section begin */
             ListNode* curr = buckets[idx].head.next;
             while(curr){
                 if (curr->get_key() == key){
@@ -100,7 +100,7 @@ public:
                 }
                 curr = curr->next;
             }
-            /* critical section end */
+            /* section end */
             _xend();
         }
         else
@@ -108,7 +108,7 @@ public:
             htmSpinWait(buckets[idx].lock);
             if (--htmRetriesLeft > 0) goto htmRetry;
             buckets[idx].lock.lock();
-            /* critical section begin */
+            /* section begin */
             ListNode* curr = buckets[idx].head.next;
             while(curr){
                 if (curr->get_key() == key){
@@ -117,18 +117,18 @@ public:
                 }
                 curr = curr->next;
             }
-            /* critical section end */
+            /* section end */
             buckets[idx].lock.unlock();
         }
         return {};
     }
 
     optional<V> put(K key, V val, int tid){
-        /* critical section begin */
+        /* section begin */
         size_t idx=hash_fn(key)%idxSize;
         ListNode* new_node = new ListNode(this, key, val);
         MontageOpHolder _holder(this);
-        /* critical section end */
+        /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
         htmRetry:
@@ -136,7 +136,7 @@ public:
         if (htmStatus == _XBEGIN_STARTED)
         {
             if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
-            /* critical section begin */
+            /* section begin */
             ListNode* curr = buckets[idx].head.next;
             ListNode* prev = &buckets[idx].head;
             while(curr){
@@ -158,7 +158,7 @@ public:
                 }
             }
             prev->next = new_node;
-            /* critical section end */
+            /* section end */
             _xend();
         }
         else
@@ -166,7 +166,7 @@ public:
             htmSpinWait(buckets[idx].lock);
             if (--htmRetriesLeft > 0) goto htmRetry;
             buckets[idx].lock.lock();
-            /* critical section begin */
+            /* section begin */
             ListNode* curr = buckets[idx].head.next;
             ListNode* prev = &buckets[idx].head;
             while(curr){
@@ -188,18 +188,18 @@ public:
                 }
             }
             prev->next = new_node;
-            /* critical section end */
+            /* section end */
             buckets[idx].lock.unlock();
         }
         return {};
     }
 
     bool insert(K key, V val, int tid){
-        /* critical section begin */
+        /* section begin */
         MontageOpHolder _holder(this);
         size_t idx=hash_fn(key)%idxSize;
         ListNode* new_node = new ListNode(this, key, val);
-        /* critical section end */
+        /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
         htmRetry:
@@ -207,7 +207,7 @@ public:
         if (htmStatus == _XBEGIN_STARTED)
         {
             if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
-            /* critical section begin */
+            /* section begin */
             ListNode* curr = buckets[idx].head.next;
             ListNode* prev = &buckets[idx].head;
             while(curr){
@@ -227,7 +227,7 @@ public:
                 }
             }
             prev->next = new_node;
-            /* critical section end */
+            /* section end */
             _xend();
         }
         else
@@ -235,7 +235,7 @@ public:
             htmSpinWait(buckets[idx].lock);
             if (--htmRetriesLeft > 0) goto htmRetry;
             buckets[idx].lock.lock();
-            /* critical section begin */
+            /* section begin */
             ListNode* curr = buckets[idx].head.next;
             ListNode* prev = &buckets[idx].head;
             while(curr){
@@ -255,7 +255,7 @@ public:
                 }
             }
             prev->next = new_node;
-            /* critical section end */
+            /* section end */
             buckets[idx].lock.unlock();
         }
         return true;
@@ -267,10 +267,10 @@ public:
     }
 
     optional<V> remove(K key, int tid){
-        /* critical section begin */
+        /* section begin */
         MontageOpHolder _holder(this);
         size_t idx=hash_fn(key)%idxSize;
-        /* critical section end */
+        /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
         htmRetry:
@@ -278,7 +278,7 @@ public:
         if (htmStatus == _XBEGIN_STARTED)
         {
             if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
-            /* critical section begin */
+            /* section begin */
             ListNode* curr = buckets[idx].head.next;
             ListNode* prev = &buckets[idx].head;
             while(curr){
@@ -297,7 +297,7 @@ public:
                     curr = curr->next;
                 }
             }
-            /* critical section end */
+            /* section end */
             _xend();
         }
         else
@@ -305,7 +305,7 @@ public:
             htmSpinWait(buckets[idx].lock);
             if (--htmRetriesLeft > 0) goto htmRetry;
             buckets[idx].lock.lock();
-            /* critical section begin */
+            /* section begin */
             ListNode* curr = buckets[idx].head.next;
             ListNode* prev = &buckets[idx].head;
             while(curr){
@@ -324,7 +324,7 @@ public:
                     curr = curr->next;
                 }
             }
-            /* critical section end */
+            /* section end */
             buckets[idx].lock.unlock();
         }
         return {};
@@ -374,11 +374,11 @@ public:
                                   gtc->affinities[rec_tid]->cpuset,
                                   HWLOC_CPUBIND_THREAD);
                 for (size_t i = rec_tid; i < payloadVector.size(); i += rec_thd){
-                    /* critical section begin */
+                    /* section begin */
                     ListNode* new_node = new ListNode(this, payloadVector[i]);
                     K key = new_node->get_key();
                     size_t idx = hash_fn(key) % idxSize;
-                    /* critical section end */
+                    /* section end */
                     int htmRetriesLeft = htmMaxRetriesLeft;
                     unsigned int htmStatus;
                     htmRetry:
@@ -386,7 +386,7 @@ public:
                     if (htmStatus == _XBEGIN_STARTED)
                     {
                         if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
-                        /* critical section begin */
+                        /* section begin */
                         ListNode* curr = buckets[idx].head.next;
                         ListNode* prev = &buckets[idx].head;
                         while (curr) {
@@ -405,7 +405,7 @@ public:
                             }
                         }
                         prev->next = new_node;
-                        /* critical section end */
+                        /* section end */
                         _xend();
                     }
                     else
@@ -413,7 +413,7 @@ public:
                         htmSpinWait(buckets[idx].lock);
                         if (--htmRetriesLeft > 0) goto htmRetry;
                         buckets[idx].lock.lock();
-                        /* critical section begin */
+                        /* section begin */
                         ListNode* curr = buckets[idx].head.next;
                         ListNode* prev = &buckets[idx].head;
                         while (curr) {
@@ -432,7 +432,7 @@ public:
                             }
                         }
                         prev->next = new_node;
-                        /* critical section end */
+                        /* section end */
                         buckets[idx].lock.unlock();
                     }
                 }
