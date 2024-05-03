@@ -83,6 +83,7 @@ public:
         /* section begin */
         size_t idx=hash_fn(key)%idxSize;
         MontageOpHolderReadOnly(this);
+        ListNode* curr;
         /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
@@ -92,7 +93,7 @@ public:
         {
             if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
             /* section begin */
-            ListNode* curr = buckets[idx].head.next;
+            curr = buckets[idx].head.next;
             while(curr){
                 if (curr->get_key() == key){
                     _xend();
@@ -105,11 +106,11 @@ public:
         }
         else
         {
-            htmSpinWait(buckets[idx].lock);
+            while(buckets[idx].lock.isLocked()) htmWait();
             if (--htmRetriesLeft > 0) goto htmRetry;
             buckets[idx].lock.lock();
             /* section begin */
-            ListNode* curr = buckets[idx].head.next;
+            curr = buckets[idx].head.next;
             while(curr){
                 if (curr->get_key() == key){
                     buckets[idx].lock.unlock();
@@ -128,6 +129,9 @@ public:
         size_t idx=hash_fn(key)%idxSize;
         ListNode* new_node = new ListNode(this, key, val);
         MontageOpHolder _holder(this);
+        ListNode *curr, *prev;
+        K curr_key;
+        optional<V> ret;
         /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
@@ -137,12 +141,12 @@ public:
         {
             if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
             /* section begin */
-            ListNode* curr = buckets[idx].head.next;
-            ListNode* prev = &buckets[idx].head;
+            curr = buckets[idx].head.next;
+            prev = &buckets[idx].head;
             while(curr){
-                K curr_key = curr->get_key();
+                curr_key = curr->get_key();
                 if (curr_key == key){
-                    optional<V> ret = curr->get_val();
+                    ret = curr->get_val();
                     curr->set_val(val);
                     delete new_node;
                     _xend();
@@ -163,16 +167,16 @@ public:
         }
         else
         {
-            htmSpinWait(buckets[idx].lock);
+            while(buckets[idx].lock.isLocked()) htmWait();
             if (--htmRetriesLeft > 0) goto htmRetry;
             buckets[idx].lock.lock();
             /* section begin */
-            ListNode* curr = buckets[idx].head.next;
-            ListNode* prev = &buckets[idx].head;
+            curr = buckets[idx].head.next;
+            prev = &buckets[idx].head;
             while(curr){
-                K curr_key = curr->get_key();
+                curr_key = curr->get_key();
                 if (curr_key == key){
-                    optional<V> ret = curr->get_val();
+                    ret = curr->get_val();
                     curr->set_val(val);
                     delete new_node;
                     buckets[idx].lock.unlock();
@@ -199,6 +203,8 @@ public:
         size_t idx=hash_fn(key)%idxSize;
         ListNode* new_node = new ListNode(this, key, val);
         MontageOpHolder _holder(this);
+        ListNode *curr, *prev;
+        K curr_key;
         /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
@@ -208,10 +214,10 @@ public:
         {
             if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
             /* section begin */
-            ListNode* curr = buckets[idx].head.next;
-            ListNode* prev = &buckets[idx].head;
+            curr = buckets[idx].head.next;
+            prev = &buckets[idx].head;
             while(curr){
-                K curr_key = curr->get_key();
+                curr_key = curr->get_key();
                 if (curr_key == key){
                     delete new_node;
                     _xend();
@@ -232,14 +238,14 @@ public:
         }
         else
         {
-            htmSpinWait(buckets[idx].lock);
+            while(buckets[idx].lock.isLocked()) htmWait();
             if (--htmRetriesLeft > 0) goto htmRetry;
             buckets[idx].lock.lock();
             /* section begin */
-            ListNode* curr = buckets[idx].head.next;
-            ListNode* prev = &buckets[idx].head;
+            curr = buckets[idx].head.next;
+            prev = &buckets[idx].head;
             while(curr){
-                K curr_key = curr->get_key();
+                curr_key = curr->get_key();
                 if (curr_key == key){
                     delete new_node;
                     buckets[idx].lock.unlock();
@@ -270,6 +276,9 @@ public:
         /* section begin */
         size_t idx=hash_fn(key)%idxSize;
         MontageOpHolder _holder(this);
+        ListNode *curr, *prev;
+        K curr_key;
+        optional<V> ret;
         /* section end */
         int htmRetriesLeft = htmMaxRetriesLeft;
         unsigned int htmStatus;
@@ -279,12 +288,12 @@ public:
         {
             if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
             /* section begin */
-            ListNode* curr = buckets[idx].head.next;
-            ListNode* prev = &buckets[idx].head;
+            curr = buckets[idx].head.next;
+            prev = &buckets[idx].head;
             while(curr){
-                K curr_key = curr->get_key();
+                curr_key = curr->get_key();
                 if (curr_key == key){
-                    optional<V> ret = curr->get_val();
+                    ret = curr->get_val();
                     prev->next = curr->next;
                     delete(curr);
                     _xend();
@@ -302,16 +311,16 @@ public:
         }
         else
         {
-            htmSpinWait(buckets[idx].lock);
+            while(buckets[idx].lock.isLocked()) htmWait();
             if (--htmRetriesLeft > 0) goto htmRetry;
             buckets[idx].lock.lock();
             /* section begin */
-            ListNode* curr = buckets[idx].head.next;
-            ListNode* prev = &buckets[idx].head;
+            curr = buckets[idx].head.next;
+            prev = &buckets[idx].head;
             while(curr){
-                K curr_key = curr->get_key();
+                curr_key = curr->get_key();
                 if (curr_key == key){
-                    optional<V> ret = curr->get_val();
+                    ret = curr->get_val();
                     prev->next = curr->next;
                     delete(curr);
                     buckets[idx].lock.unlock();
@@ -367,6 +376,15 @@ public:
         std::cout << "Spent " << dur_ms_vec << "ms building vector" << std::endl;
         begin = chrono::high_resolution_clock::now();
         std::vector<std::thread> workers;
+
+        ListNode* new_node;
+        size_t idx;
+        K key;
+        int htmRetriesLeft;
+        unsigned int htmStatus;
+        ListNode *curr, *prev;
+        K curr_key;
+
         for (int rec_tid = 0; rec_tid < rec_thd; rec_tid++) {
             workers.emplace_back(std::thread([&, rec_tid]() {
                 Recoverable::init_thread(rec_tid);
@@ -375,22 +393,21 @@ public:
                                   HWLOC_CPUBIND_THREAD);
                 for (size_t i = rec_tid; i < payloadVector.size(); i += rec_thd){
                     /* section begin */
-                    ListNode* new_node = new ListNode(this, payloadVector[i]);
-                    K key = new_node->get_key();
-                    size_t idx = hash_fn(key) % idxSize;
+                    new_node = new ListNode(this, payloadVector[i]);
+                    key = new_node->get_key();
+                    idx = hash_fn(key) % idxSize;
                     /* section end */
-                    int htmRetriesLeft = htmMaxRetriesLeft;
-                    unsigned int htmStatus;
+                    htmRetriesLeft = htmMaxRetriesLeft;
                     htmRetry:
                     htmStatus = _xbegin();
                     if (htmStatus == _XBEGIN_STARTED)
                     {
                         if (buckets[idx].lock.isLocked()) _xabort(_XABORT_EXPLICIT);
                         /* section begin */
-                        ListNode* curr = buckets[idx].head.next;
-                        ListNode* prev = &buckets[idx].head;
+                        curr = buckets[idx].head.next;
+                        prev = &buckets[idx].head;
                         while (curr) {
-                            K curr_key = curr->get_key();
+                            curr_key = curr->get_key();
                             if (curr_key == key) {
                                 _xend();
                                 errexit("conflicting keys recovered.");
@@ -410,14 +427,14 @@ public:
                     }
                     else
                     {
-                        htmSpinWait(buckets[idx].lock);
+                        while(buckets[idx].lock.isLocked()) htmWait();
                         if (--htmRetriesLeft > 0) goto htmRetry;
                         buckets[idx].lock.lock();
                         /* section begin */
-                        ListNode* curr = buckets[idx].head.next;
-                        ListNode* prev = &buckets[idx].head;
+                        curr = buckets[idx].head.next;
+                        prev = &buckets[idx].head;
                         while (curr) {
-                            K curr_key = curr->get_key();
+                            curr_key = curr->get_key();
                             if (curr_key == key) {
                                 buckets[idx].lock.unlock();
                                 errexit("conflicting keys recovered.");
@@ -436,8 +453,8 @@ public:
                         buckets[idx].lock.unlock();
                     }
                 }
-            }));  // workers.emplace_back()
-        }// for (rec_thd)
+            }));
+        }
         for (auto& worker : workers) {
             if (worker.joinable()) {
                 worker.join();

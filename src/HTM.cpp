@@ -1,15 +1,18 @@
 #include "HTM.hpp"
 
-const int htmMaxRetriesLeft = 35;
+const int htmMaxRetriesLeft = 1;
 const unsigned htmMaxPauseTimes = 2;
 
 void GlobalLock::lock()
 {
     while (true)
     {
-        while (flag)
+        if (*flag)
+        {
             __asm__ __volatile__("pause;");
-        if (__sync_bool_compare_and_swap(&flag, false, true))
+            continue;
+        }
+        if (__sync_bool_compare_and_swap(flag, false, true))
             return;
     }
 }
@@ -17,10 +20,10 @@ void GlobalLock::lock()
 void GlobalLock::unlock()
 {
     __asm__ __volatile__("" ::: "memory");
-    flag = false;
+    *flag = false;
 }
 
 bool GlobalLock::isLocked() const
 {
-    return flag;
+    return *flag;
 }

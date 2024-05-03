@@ -113,7 +113,7 @@ void HTMQueue<T>::enqueue(T val, int tid){
     }
     else
     {
-        htmSpinWait(lock);
+        while(lock.isLocked()) htmWait();
         if (--htmRetriesLeft > 0) goto htmRetry;
         lock.lock();
         /* section begin */
@@ -136,6 +136,7 @@ optional<T> HTMQueue<T>::dequeue(int tid){
     /* section begin */
     optional<T> res = {};
     MontageOpHolder _holder(this);
+    Node* tmp;
     /* section end */
     int htmRetriesLeft = htmMaxRetriesLeft;
     unsigned int htmStatus;
@@ -149,7 +150,7 @@ optional<T> HTMQueue<T>::dequeue(int tid){
             _xend();
             return res;
         }
-        Node* tmp = head;
+        tmp = head;
         head = head->next;
         if(head == nullptr) {
             tail = nullptr;
@@ -163,7 +164,7 @@ optional<T> HTMQueue<T>::dequeue(int tid){
     }
     else
     {
-        htmSpinWait(lock);
+        while (lock.isLocked()) htmWait();
         if (--htmRetriesLeft > 0) goto htmRetry;
         lock.lock();
         /* section begin */
@@ -171,7 +172,7 @@ optional<T> HTMQueue<T>::dequeue(int tid){
             lock.unlock();
             return res;
         }
-        Node* tmp = head;
+        tmp = head;
         res = tmp->get_val();
         head = head->next;
         if(head == nullptr) {

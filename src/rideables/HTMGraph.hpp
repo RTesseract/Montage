@@ -195,6 +195,7 @@ class HTMGraph : public RGraph, public Recoverable{
         }
 
         VertexMeta* vMeta;
+        GlobalLock globalLock;
         
         // Thread-safe and does not leak edges
         void clear() {
@@ -243,7 +244,7 @@ class HTMGraph : public RGraph, public Recoverable{
             }
             else
             {
-                htmSpinWait2(src, dest);
+                while (isLocked(src) || isLocked(dest)) htmWait();
                 if (--htmRetriesLeft > 0) goto htmRetry;
                 if (src > dest) {
                     lock(dest);
@@ -307,7 +308,7 @@ class HTMGraph : public RGraph, public Recoverable{
             }
             else
             {
-                htmSpinWait(src);
+                while (isLocked(src)) htmWait();
                 if (--htmRetriesLeft > 0) goto htmRetry;
                 lock(src);
                 /* section begin */
@@ -363,7 +364,7 @@ class HTMGraph : public RGraph, public Recoverable{
             }
             else
             {
-                htmSpinWait2(src, dest);
+                while (isLocked(src) || isLocked(dest)) htmWait();
                 if (--htmRetriesLeft > 0) goto htmRetry;
                 if (src > dest) {
                     lock(dest);
@@ -611,6 +612,7 @@ class HTMGraph : public RGraph, public Recoverable{
             std::sort(vec.begin(), vec.end()); 
             vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
             auto new_v = new tVertex(this, vid, vid);
+            Relation *r;
             /* section end */
             int htmRetriesLeft = htmMaxRetriesLeft;
             unsigned int htmStatus;
@@ -618,7 +620,7 @@ class HTMGraph : public RGraph, public Recoverable{
             htmStatus = _xbegin();
             if (htmStatus == _XBEGIN_STARTED)
             {
-                if (isLocked(vec)) _xabort(_XABORT_EXPLICIT);
+                if (globalLock.isLocked()) _xabort(_XABORT_EXPLICIT);
                 /* section begin */
                 if (vertex(vid) == nullptr) {
                     MontageOpHolder _holder(this);
@@ -626,7 +628,7 @@ class HTMGraph : public RGraph, public Recoverable{
                     for (int u : vec) {
                         if (vertex(u) == nullptr) continue;
                         if (u == vid) continue;
-                        Relation *r = pnew<Relation>(vid, u, -1);
+                        r = pnew<Relation>(vid, u, -1);
                         auto p = make_pair(vid, u);
                         source(vid).emplace(p,r);
                         destination(u).emplace(p,r);
@@ -639,10 +641,9 @@ class HTMGraph : public RGraph, public Recoverable{
             }
             else
             {
-                htmSpinWaitN(vec);
+                while (globalLock.isLocked()) htmWait();
                 if (--htmRetriesLeft > 0) goto htmRetry;
-                for (int u : vec)
-                    lock(u);
+                globalLock.lock();
                 /* section begin */
                 if (vertex(vid) == nullptr) {
                     MontageOpHolder _holder(this);
@@ -650,7 +651,7 @@ class HTMGraph : public RGraph, public Recoverable{
                     for (int u : vec) {
                         if (vertex(u) == nullptr) continue;
                         if (u == vid) continue;
-                        Relation *r = pnew<Relation>(vid, u, -1);
+                        r = pnew<Relation>(vid, u, -1);
                         auto p = make_pair(vid, u);
                         source(vid).emplace(p,r);
                         destination(u).emplace(p,r);
@@ -659,10 +660,9 @@ class HTMGraph : public RGraph, public Recoverable{
                     retval = false;
                 }
                 /* section end */
-                for (auto u = vec.rbegin(); u != vec.rend(); u++) {
+                for (auto u = vec.rbegin(); u != vec.rend(); u++)
                     if (vertex(vid) != nullptr && vertex(*u) != nullptr) inc_seq(*u);
-                    unlock(*u);
-                }
+                globalLock.unlock();
             }
 
             if(retval==false){
@@ -700,7 +700,7 @@ class HTMGraph : public RGraph, public Recoverable{
             }
             else
             {
-                htmSpinWait(vid);
+                while (isLocked(vid)) htmWait();
                 if (--htmRetriesLeft > 0) goto htmRetry1;
                 lock(vid);
                 /* section begin */
@@ -721,76 +721,150 @@ class HTMGraph : public RGraph, public Recoverable{
             std::sort(vertices.begin(), vertices.end()); 
             vertices.erase(std::unique(vertices.begin(), vertices.end()), vertices.end());
 
-            for (int _vid : vertices) {
-                lock(_vid);
-                if (vertex(_vid) == nullptr && get_seq(vid) == seq) {
-                    for (auto r : source(vid)) {
-                        if (r.second->dest() == _vid)
-                        std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
-                    }
-                    for (auto r : destination(vid)) {
-                        if (r.second->src() == _vid)
-                        std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
-                    }
-                    std::abort();
-                }
-            }
-
-            if (get_seq(vid) != seq) {
-                for (auto _vid = vertices.rbegin(); _vid != vertices.rend(); _vid++)
-                    unlock(*_vid);
-                goto startOver;
-            }
-
+            htmRetriesLeft = htmMaxRetriesLeft;
+            htmRetry2:
+            htmStatus = _xbegin();
+            if (htmStatus == _XBEGIN_STARTED)
             {
-                MontageOpHolder _holder(this);
-                for (int other : vertices) {
-                    if (other == vid) continue;
-
-                    auto src = make_pair(other, vid);
-                    auto dest = make_pair(vid, other);
-                    if (!has_relation(source(other), src) && !has_relation(destination(other), dest)) {
-                        std::cout << "Observed pair (" << vid << "," << other << ") that was originally there but no longer is..." << std::endl;
+                if (globalLock.isLocked()) _xabort(_XABORT_EXPLICIT);
+                /* section begin */
+                for (int _vid : vertices) {
+                    if (vertex(_vid) == nullptr && get_seq(vid) == seq) {
                         for (auto r : source(vid)) {
-                            if (r.second->dest() == other)
-                            std::cout << "Us: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
-                        }
-                        for (auto r : destination(other)) {
-                            if (r.second->src() == vid) {
-                                std::cout << "Them: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
-                            }
+                            if (r.second->dest() == _vid)
+                            std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
                         }
                         for (auto r : destination(vid)) {
-                            if (r.second->src() == other) {
-                                std::cout << "Us: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
-                            }
-                        }
-                        for (auto r : source(other)) {
-                            if (r.second->dest() == vid) {
-                                std::cout << "Them: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
-                            }
+                            if (r.second->src() == _vid)
+                            std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
                         }
                         std::abort();
                     }
-                    
-                    auto ret1 = remove_relation(source(other), src); // this may fail
-                    auto ret2 = remove_relation(destination(other), dest);// this may fail
-                    if(ret1!=nullptr){
-                        pdelete(ret1);// only deallocate relation removed from source
-                    }
-                    assert(!has_relation(source(other), src) && !has_relation(destination(other), dest));
                 }
+                if (get_seq(vid) != seq) goto startOver;
                 
-                for (auto r : source(vid)) pdelete(r.second);
-                source(vid).clear();
-                destination(vid).clear();
-                destroy(vid);
-            }
+                {
+                    MontageOpHolder _holder(this);
+                    for (int other : vertices) {
+                        if (other == vid) continue;
+
+                        auto src = make_pair(other, vid);
+                        auto dest = make_pair(vid, other);
+                        if (!has_relation(source(other), src) && !has_relation(destination(other), dest)) {
+                            std::cout << "Observed pair (" << vid << "," << other << ") that was originally there but no longer is..." << std::endl;
+                            for (auto r : source(vid)) {
+                                if (r.second->dest() == other)
+                                std::cout << "Us: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                            }
+                            for (auto r : destination(other)) {
+                                if (r.second->src() == vid) {
+                                    std::cout << "Them: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                                }
+                            }
+                            for (auto r : destination(vid)) {
+                                if (r.second->src() == other) {
+                                    std::cout << "Us: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                                }
+                            }
+                            for (auto r : source(other)) {
+                                if (r.second->dest() == vid) {
+                                    std::cout << "Them: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                                }
+                            }
+                            std::abort();
+                        }
+                    
+                        auto ret1 = remove_relation(source(other), src);
+                        auto ret2 = remove_relation(destination(other), dest);
+                        if(ret1!=nullptr){
+                            pdelete(ret1);
+                        }
+                        assert(!has_relation(source(other), src) && !has_relation(destination(other), dest));
+                    }
+                
+                    for (auto r : source(vid)) pdelete(r.second);
+                    source(vid).clear();
+                    destination(vid).clear();
+                    destroy(vid);
+                }
             
-            for (auto _vid = vertices.rbegin(); _vid != vertices.rend(); _vid++) {
-                inc_seq(*_vid);
-                unlock(*_vid);
+                for (auto _vid = vertices.rbegin(); _vid != vertices.rend(); _vid++)
+                    inc_seq(*_vid);
+                /* section end */
+                _xend();
             }
+            else
+            {
+                while (globalLock.isLocked()) htmWait();
+                if (--htmRetriesLeft > 0) goto htmRetry2;
+                globalLock.lock();
+                /* section begin */
+                for (int _vid : vertices) {
+                    if (vertex(_vid) == nullptr && get_seq(vid) == seq) {
+                        for (auto r : source(vid)) {
+                            if (r.second->dest() == _vid)
+                            std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                        }
+                        for (auto r : destination(vid)) {
+                            if (r.second->src() == _vid)
+                            std::cout << "(" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                        }
+                        std::abort();
+                    }
+                }
+                if (get_seq(vid) != seq) goto startOver;
+
+                {
+                    MontageOpHolder _holder(this);
+                    for (int other : vertices) {
+                        if (other == vid) continue;
+
+                        auto src = make_pair(other, vid);
+                        auto dest = make_pair(vid, other);
+                        if (!has_relation(source(other), src) && !has_relation(destination(other), dest)) {
+                            std::cout << "Observed pair (" << vid << "," << other << ") that was originally there but no longer is..." << std::endl;
+                            for (auto r : source(vid)) {
+                                if (r.second->dest() == other)
+                                std::cout << "Us: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                            }
+                            for (auto r : destination(other)) {
+                                if (r.second->src() == vid) {
+                                    std::cout << "Them: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                                }
+                            }
+                            for (auto r : destination(vid)) {
+                                if (r.second->src() == other) {
+                                    std::cout << "Us: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                                }
+                            }
+                            for (auto r : source(other)) {
+                                if (r.second->dest() == vid) {
+                                    std::cout << "Them: (" << r.second->src() << "," << r.second->dest() << ")" << std::endl;
+                                }
+                            }
+                            std::abort();
+                        }
+                    
+                        auto ret1 = remove_relation(source(other), src);
+                        auto ret2 = remove_relation(destination(other), dest);
+                        if(ret1!=nullptr){
+                            pdelete(ret1);
+                        }
+                        assert(!has_relation(source(other), src) && !has_relation(destination(other), dest));
+                    }
+                
+                    for (auto r : source(vid)) pdelete(r.second);
+                    source(vid).clear();
+                    destination(vid).clear();
+                    destroy(vid);
+                }
+            
+                for (auto _vid = vertices.rbegin(); _vid != vertices.rend(); _vid++)
+                    inc_seq(*_vid);
+                /* section end */
+                globalLock.unlock();
+            }
+
             return true;
         }
         
@@ -807,35 +881,8 @@ class HTMGraph : public RGraph, public Recoverable{
                 vMeta[idx].vertexLocks.unlock();
             }
 
-            bool isLocked(size_t idx) const {
+            inline bool isLocked(size_t idx) const {
                 return vMeta[idx].vertexLocks.isLocked();
-            }
-
-            bool isLocked(std::vector<int> &vec) {
-                for (int i : vec)
-                    if (isLocked(i)) return true;
-                return false;
-            }
-
-            inline void htmSpinWait(size_t idx)
-            {
-                while (isLocked(idx))
-                    for (unsigned htmPauseTimes = 0; htmPauseTimes < htmMaxPauseTimes; ++htmPauseTimes)
-                        _mm_pause();
-            }
-
-            inline void htmSpinWait2(size_t idx1, size_t idx2)
-            {
-                while (isLocked(idx1) || isLocked(idx2))
-                    for (unsigned htmPauseTimes = 0; htmPauseTimes < htmMaxPauseTimes; ++htmPauseTimes)
-                        _mm_pause();
-            }
-
-            inline void htmSpinWaitN(std::vector<int> &vec)
-            {
-                while (isLocked(vec))
-                    for (unsigned htmPauseTimes = 0; htmPauseTimes < htmMaxPauseTimes; ++htmPauseTimes)
-                        _mm_pause();
             }
 
             // Lock must be owned for next operations...

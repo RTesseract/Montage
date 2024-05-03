@@ -9,18 +9,18 @@ extern const unsigned htmMaxPauseTimes;
 class GlobalLock
 {
 private:
-    volatile bool flag = false;
+    volatile bool _flag = false;
+    volatile bool *flag = &_flag;
 public:
     void lock();
     void unlock();
     bool isLocked() const;
 };
 
-inline void htmSpinWait(GlobalLock &lock)
+inline void htmWait()
 {
-    while (lock.isLocked())
-        for (unsigned htmPauseTimes = 0; htmPauseTimes < htmMaxPauseTimes; ++htmPauseTimes)
-            _mm_pause();
+    for (unsigned htmPauseTimes = 0; htmPauseTimes < htmMaxPauseTimes; ++htmPauseTimes)
+        _mm_pause();
 }
 
 #endif // HTM_HPP
