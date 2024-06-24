@@ -1,0 +1,63 @@
+usage: ./bin/main [-m <test_mode_index>] [-M <test_mode_name>] [-r <rideable_test_object_index>] [-R <rideable_test_object_name>] [-a single|dfs|default] [-i <interval>] [-t <num_threads>] [-o <output_csv_file>] [-w <warm_up_MBs>] [-d <env_variable>=<value>] [-z] [-v] [-h]
+Rideable 0 : MSQueue
+Rideable 1 : NVMMSQueue
+Rideable 2 : FriedmanQueue
+Rideable 3 : MontageMSQueue
+Rideable 4 : TransientQueue<DRAM>
+Rideable 5 : TransientQueue<NVM>
+Rideable 6 : MontageQueue
+Rideable 7 : MODQueue
+Rideable 8 : LfHashTable
+Rideable 9 : NVMLockfreeHashTable
+Rideable 10 : PLockfreeHashTable
+Rideable 11 : MontageLfHashTable
+Rideable 12 : Dali
+Rideable 13 : SOFT
+Rideable 14 : MODHashTable
+Rideable 15 : NVMSOFT
+Rideable 16 : NVTraverseHashTable
+Rideable 17 : CLevelHashTable
+Rideable 18 : SSHashTable
+Rideable 19 : MontageSSHashTable
+Rideable 20 : NataTree
+Rideable 21 : NVMNataTree
+Rideable 22 : HTMvEBTree
+Rideable 23 : TransientHashTable<DRAM>
+Rideable 24 : TransientHashTable<NVM>
+Rideable 25 : MontageHashTable
+Rideable 26 : PNataTree
+Rideable 27 : MontageNataTree
+Rideable 28 : NVTraverseNataTree
+Rideable 29 : LockfreeSkipList
+Rideable 30 : MontageLfSkipList
+Rideable 31 : NVMLockfreeSkipList
+Rideable 32 : PLockfreeSkipList
+Rideable 33 : NVTLockfreeSkipList
+Rideable 34 : TGraph
+Rideable 35 : NVMGraph
+Rideable 36 : MontageGraph
+Rideable 37 : Orkut
+Rideable 38 : TransientOrkut
+Rideable 39 : MontageLfHashTable<uint64_t>
+Rideable 40 : LfHashTable<uint64_t>
+Rideable 41 : NVMLockfreeHashTable<uint64_t>
+Test Mode 0 : vEBTest<int>:g0p0i50rm50:range=16
+Test Mode 1 : QueueChurn:eq50dq50:prefill=2000
+Test Mode 2 : Queue:5m
+Test Mode 3 : MapChurnTest<string>:g0p0i50rm50:range=1000000:prefill=500000
+Test Mode 4 : MapChurnTest<string>:g50p0i25rm25:range=1000000:prefill=500000
+Test Mode 5 : MapChurnTest<string>:g90p0i5rm5:range=1000000:prefill=500000
+Test Mode 6 : MapTest<string>:g0p0i50rm50:range=1000000:prefill=500000:op=10000000
+Test Mode 7 : MapTest<string>:g50p0i25rm25:range=1000000:prefill=500000:op=10000000
+Test Mode 8 : MapTest<string>:g90p0i5rm5:range=1000000:prefill=500000:op=10000000
+Test Mode 9 : MapSyncTest<string>:g0p0i50rm50:range=1000000:prefill=500000
+Test Mode 10 : MapSyncTest<string>:g50p0i25rm25:range=1000000:prefill=500000
+Test Mode 11 : QueueSync:eq50dq50:prefill=2000
+Test Mode 12 : MapChurnTest<uint64_t>:g50p0i25rm25:range=1000000:prefill=500000
+Test Mode 13 : MapVerify
+Test Mode 14 : RecoverVerifyTest
+Test Mode 15 : GraphRecoveryTest:Orkut:noverify
+Test Mode 16 : TGraphConstructionTest:Orkut
+Test Mode 17 : AllocTest-JEMalloc
+Test Mode 18 : AllocTest-Ralloc
+Test Mode 19 : AllocTest-Montage
