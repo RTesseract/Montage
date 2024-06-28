@@ -18,7 +18,7 @@ def parse_int(range_string: str) -> List[int]:
 def main():
     s: str = ''
     while True:
-        s = input('Task? <(c)lean | compile-(r)elease | compile-(d)ebug | r(u)n | e(x)it>: ')
+        s = input('Task? <(c)lean | compile-(r)elease | compile-(d)ebug | r(u)n | run-(g)db | e(x)it>: ')
         if s == 'c':
             system('make clean && clear')
         elif s == 'r':
@@ -27,7 +27,7 @@ def main():
         elif s == 'd':
             if system('make -j10 BUILD=debug') == 0:
                 system('./bin/main > nums.txt 2>&1 && clear')
-        elif s == 'u' or s == 'x':
+        elif s == 'u' or s == 'g' or s == 'x':
             break
         else:
             continue

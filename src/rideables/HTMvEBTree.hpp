@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
-// #include <cstdio>
+// #include <plaf.h>
 
 #include "RSet.hpp"
 
@@ -46,6 +46,10 @@
         releaseLock(&globalLock);              \
         TRACK_STATS_FALLBACK(op)               \
     }
+// #define TLE(op, func, args)                    \
+//         acquireLock(&globalLock);              \
+//         retval = this->func(args);             \
+//         releaseLock(&globalLock);              \
 
 #define CUTOFF 2
 #define CUTOFF_POWER 0
@@ -124,6 +128,45 @@ UniverseInfo divide_node(i64 u, int cutoffPower, bool isKV) {
 }
 
 template <class K>
+class VebKNaive;
+
+inline VebKNaive<int> *root;
+
+template <class K>
+void print_tree(VebKNaive<K> *node, bool summary, i64 level)
+{
+    if (!node)
+        return;
+    UniverseInfo ui = kMap[node->u];
+    printf("level %ld (%s): (u=%ld, min=%ld, max=%ld), (clusterSize=%ld, nClusters=%ld, lowBits=%ld, highBits=%ld, lowMask=%ld)\n", level, summary ? "summary": "cluster", node->u, node->min, node->max, ui.clusterSize, ui.nClusters, ui.lowBits, ui.highBits, ui.lowMask);
+    // if (node->summary)
+    //     print_tree(node->summary, true, level + 1);
+    // if (node->clusters)
+    //     for (i64 i = 0; i < ui.nClusters; ++i)
+    //         print_tree(node->clusters[i], false, level + 1);
+}
+
+template <class K>
+void print_tree(VebKNaive<K> *node)
+{
+    printf("=====start=====\n");
+    print_tree(node, false, 0);
+    print_tree(node->clusters[0], false, 1);
+    print_tree(node->clusters[0]->clusters[0], false, 2);
+    print_tree(node->clusters[0]->clusters[1], false, 2);
+    print_tree(node->clusters[1], false, 1);
+    print_tree(node->clusters[1]->clusters[0], false, 2);
+    print_tree(node->clusters[1]->clusters[1], false, 2);
+    print_tree(node->clusters[2], false, 1);
+    print_tree(node->clusters[2]->clusters[0], false, 2);
+    print_tree(node->clusters[2]->clusters[1], false, 2);
+    print_tree(node->clusters[3], false, 1);
+    print_tree(node->clusters[3]->clusters[0], false, 2);
+    print_tree(node->clusters[3]->clusters[1], false, 2);
+    printf("=====end=====\n");
+}
+
+template <class K>
 class VebKNaive : public RSet<K>
 {
 public:
@@ -199,6 +242,9 @@ public:
     void initThread(const int tid) {
         kMap.clear();
         populate_maps(this->u, false);
+
+        // print_tree(root);
+        // printf("initThread()\n");
 
         // for (const auto &pair : kMap) {
         //     i64 _u = pair.first;
@@ -414,6 +460,7 @@ public:
 
     bool insertDriver(const int tid, i64 x) {
         bool retval = false;
+        // printf("insertDriver(tid=%d, x=%ld): start\n", tid, x);
         TLE(INSERT, insert, x);
         // if (retval) {
         //     for (auto it = kToRefill.begin(); it != kToRefill.end(); ++it) {
@@ -424,11 +471,14 @@ public:
         //     }
         //     kToRefill.clear();
         // }
+        // print_tree(root);
+        // printf("insertDriver(tid=%d, x=%ld): end\n", tid, x);
         return retval;
     }
 
     bool delDriver(const int tid, i64 x) {
         bool retval = false;
+        // printf("delDriver(tid=%d, x=%ld): start\n", tid, x);
         TLE(DELETE, del, x);
 
         // if (retval) {
@@ -443,6 +493,8 @@ public:
         //     }
         //     kToReclaim.clear();
         // }
+        // print_tree(root);
+        // printf("delDriver(tid=%d, x=%ld): end\n", tid, x);
         return retval;
     }
 };
@@ -452,7 +504,7 @@ class HTMvEBTreeFactory : public RideableFactory
 {
     Rideable* build(GlobalTestConfig* gtc)
     {
-        return new VebKNaive<T>(16);
+        return root = new VebKNaive<T>(0x10000000);
     }
 };
 

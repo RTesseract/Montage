@@ -41,7 +41,7 @@ Rideable 38 : TransientOrkut
 Rideable 39 : MontageLfHashTable<uint64_t>
 Rideable 40 : LfHashTable<uint64_t>
 Rideable 41 : NVMLockfreeHashTable<uint64_t>
-Test Mode 0 : vEBTest<int>:g0p0i50rm50:range=16
+Test Mode 0 : vEBTest<int>:g0p0i50rm50:range=0x10000000
 Test Mode 1 : QueueChurn:eq50dq50:prefill=2000
 Test Mode 2 : Queue:5m
 Test Mode 3 : MapChurnTest<string>:g0p0i50rm50:range=1000000:prefill=500000

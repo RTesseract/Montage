@@ -35,8 +35,7 @@ public:
 	}
 
 	void parInit(GlobalTestConfig* gtc, LocalTestConfig* ltc) override {
-		ChurnTest::parInit(gtc,ltc);
-		s->populate_maps(16, true);
+		s->initThread(ltc->tid);
 	}
 
 	Rideable* getRideable(){
