@@ -12,26 +12,21 @@
 template <class T>
 class vEBChurnTest : public ChurnTest{
 public:
-	VebKNaive<T>* s;
+	HTMvEBTree<T>* s;
 
 	vEBChurnTest(int p_gets, int p_puts, int p_inserts, int p_removes, int range, int prefill):
-		ChurnTest(p_gets, p_puts, p_inserts, p_removes, range, prefill){}
+		ChurnTest(p_gets, p_puts, p_inserts, p_removes, range, prefill){ HTMvEBTreeRange = range; }
 	vEBChurnTest(int p_gets, int p_puts, int p_inserts, int p_removes, int range):
-		ChurnTest(p_gets, p_puts, p_inserts, p_removes, range){}
+		ChurnTest(p_gets, p_puts, p_inserts, p_removes, range){ HTMvEBTreeRange = range; }
 
 	inline T fromInt(uint64_t v);
 
 	void allocRideable(GlobalTestConfig* gtc){
 		Rideable* ptr = gtc->allocRideable();
-		s = dynamic_cast<VebKNaive<T>*>(ptr);
+		s = dynamic_cast<HTMvEBTree<T>*>(ptr);
 		if (!s) {
-			 errexit("vEBChurnTest must be run on VebKNaive<T> type object.");
+			 errexit("vEBChurnTest must be run on HTMvEBTree<T> type object.");
 		}
-
-		// printf("kMap:\n");
-		// for (auto it = kMap.begin(); it != kMap.end(); it++){
-		// 	printf("VebKNaive(u): u=%ld, ui=(clusterSize=%ld, nClusters=%ld, lowBits=%ld, highBits=%ld, lowMask=%ld)\n", it->first, it->second.clusterSize, it->second.nClusters, it->second.lowBits, it->second.highBits, it->second.lowMask);
-		// }
 	}
 
 	void parInit(GlobalTestConfig* gtc, LocalTestConfig* ltc) override {

@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
 	gtc.addRideableOption(new ProntoQueueFactory(), "ProntoQueue");
 	gtc.addRideableOption(new ProntoHashTableFactory(), "ProntoHashTable");
 #endif
-	gtc.addTestOption(new vEBChurnTest<int>(0, 0, 50, 50, 0x10000000, 0), "vEBTest<int>:g0p0i50rm50:range=0x10000000");
+	gtc.addTestOption(new vEBChurnTest<int>(0, 0, 50, 50, 16384, 0), "vEBChurnTest<int>:g0p0i50rm50");
 	gtc.addTestOption(new QueueChurnTest(50,50,2000), "QueueChurn:eq50dq50:prefill=2000");
 	gtc.addTestOption(new QueueTest(5000000,50), "Queue:5m");
 	gtc.addTestOption(new MapChurnTest<string,string>(0, 0, 50, 50, 1000000, 500000), "MapChurnTest<string>:g0p0i50rm50:range=1000000:prefill=500000");
