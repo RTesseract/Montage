@@ -55,10 +55,11 @@ def main():
     if not exists('./bin/main'):
         print('Executable not found. Please compile first.')
         return
+    gdb: str = 'gdb --batch --quiet --args' if s == 'g' else ''
     for rideable in rideables:
         for test in tests:
             for thread in threads:
-                system(f'./bin/main -r {rideable} -m {test} -t {thread}')
+                system(f'{gdb} ./bin/main -r {rideable} -m {test} -t {thread}')
 
 if __name__ == '__main__':
     try:
