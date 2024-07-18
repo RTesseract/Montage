@@ -88,6 +88,8 @@ public:
         return _esys->check_epoch(c);
     }
     void begin_op(){
+        printf("begin_op(): pds::EpochSys::tid=%d\n", pds::EpochSys::tid);
+        printf("begin_op(): epochs[...].ui=%lu\n", epochs[pds::EpochSys::tid].ui);
         assert(epochs[pds::EpochSys::tid].ui == NULL_EPOCH);
         epochs[pds::EpochSys::tid].ui = _esys->begin_transaction();
         for(auto & r : pending_retires[pds::EpochSys::tid].ui) {

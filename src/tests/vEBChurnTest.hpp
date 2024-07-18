@@ -7,7 +7,6 @@
 #include "ChurnTest.hpp"
 #include "TestConfig.hpp"
 #include "HTMvEBTree.hpp"
-// #include <cstdio>
 
 template <class T>
 class vEBChurnTest : public ChurnTest{
