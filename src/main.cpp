@@ -50,6 +50,7 @@
 #include "NVTNatarajanTree.hpp"
 #include "PNatarajanTree.hpp"
 #include "NVMNatarajanTree.hpp"
+#include "MontageVEBTree.hpp"
 
 #include "SSHashTable.hpp"
 #include "MontageSSHashTable.hpp"
@@ -87,6 +88,7 @@
 #include "SetChurnTest.hpp"
 #include "MapTest.hpp"
 #include "MapChurnTest.hpp"
+#include "VEBTreeTest.hpp"
 #include "SyncTest.hpp"
 #ifndef MNEMOSYNE
 #include "RecoverVerifyTest.hpp"
@@ -141,6 +143,7 @@ int main(int argc, char *argv[])
 	gtc.addRideableOption(new PNatarajanTreeFactory(), "PNataTree");
 	gtc.addRideableOption(new MontageNatarajanTreeFactory<string>(), "MontageNataTree");
 	gtc.addRideableOption(new NVTNatarajanTreeFactory(), "NVTraverseNataTree");
+	gtc.addRideableOption(new MontageVEBTreeFactory(), "MontageVEBTree");
 	gtc.addRideableOption(new LockfreeSkipListFactory<std::string>(), "LockfreeSkipList");
 	gtc.addRideableOption(new MontageLfSkipListFactory<std::string>(), "MontageLfSkipList");
 	gtc.addRideableOption(new NVMLockfreeSkipListFactory<std::string>(), "NVMLockfreeSkipList");
@@ -185,6 +188,7 @@ int main(int argc, char *argv[])
 	
 	gtc.addTestOption(new MapChurnTest<uint64_t,uint64_t>(50, 0, 25, 25, 1000000, 500000), "MapChurnTest<uint64_t>:g50p0i25rm25:range=1000000:prefill=500000");
 	gtc.addTestOption(new MapVerify<string, string>(50, 0, 25, 25, 1000000, 10000), "MapVerify");
+	gtc.addTestOption(new VEBTreeTest(20, 20, 20, 20, 20, 1 << 28), "VEBTreeTest:i20d20m20p20s20:range=1<<28:prefill=500000:op=10000000");
 #ifndef MNEMOSYNE
 	gtc.addTestOption(new RecoverVerifyTest<string,string>(&gtc), "RecoverVerifyTest");
 
