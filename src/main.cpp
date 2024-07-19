@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
 	
 	gtc.addTestOption(new MapChurnTest<uint64_t,uint64_t>(50, 0, 25, 25, 1000000, 500000), "MapChurnTest<uint64_t>:g50p0i25rm25:range=1000000:prefill=500000");
 	gtc.addTestOption(new MapVerify<string, string>(50, 0, 25, 25, 1000000, 10000), "MapVerify");
-	gtc.addTestOption(new VEBTreeTest(20, 20, 20, 20, 20, 1 << 28), "VEBTreeTest:i20d20m20p20s20:range=1<<28:prefill=500000:op=10000000");
+	gtc.addTestOption(new VEBTreeTest(16, 16, 16, 20, 16, 16, 1 << 28), "VEBTreeTest:i20d20m20p20s20:range=1<<28:prefill=500000:op=10000000");
 #ifndef MNEMOSYNE
 	gtc.addTestOption(new RecoverVerifyTest<string,string>(&gtc), "RecoverVerifyTest");
 

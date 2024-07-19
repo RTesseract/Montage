@@ -4,13 +4,13 @@
 #include <immintrin.h>
 #include <stdio.h>
 
-#include <bit>
+// #include <bit>
 #include <bitset>
 #include <iostream>
 #include <map>
 #include <vector>
 
-#include "globals_extern.h"
+#include "plaf.h"
 #include "locks_impl.h"
 #include "veb_global.h"
 
@@ -65,8 +65,17 @@ thread_local vector<void *> kvToReclaim;       // for kv structures
         PTR_TO_KVINTERNAL((ptr))->func(args); \
     }
 
+namespace custom {
+    constexpr int countl_zero(ui64 x) noexcept {
+        return x == 0 ? 64 : __builtin_clzl(x);
+    }
+    constexpr int countr_zero(ui64 x) noexcept {
+        return x == 0 ? 64 : __builtin_ctzl(x);
+    }
+}
+
 class VebKLeaf {
-   public:
+public:
     i64 u;
     volatile i64 min;
     volatile i64 max;
@@ -117,7 +126,7 @@ class VebKLeaf {
         ui64 tempBitmap = this->bitmap;
         ui64 mask = 0xFFFFFFFFFFFFFFFFu << (x + 1);
 
-        i64 consecutiveZerosOnRight = countr_zero(tempBitmap & mask);
+        i64 consecutiveZerosOnRight = custom::countr_zero(tempBitmap & mask);
 
         // TODO: fix constant
         return consecutiveZerosOnRight == 64 ? -1 : consecutiveZerosOnRight;
@@ -151,7 +160,7 @@ class VebKLeaf {
         ui64 tempBitmap = this->bitmap;
         ui64 mask = ~(0xFFFFFFFFFFFFFFFFu << (x));
 
-        int consecutiveZerosOnLeft = countl_zero(tempBitmap & mask);
+        int consecutiveZerosOnLeft = custom::countl_zero(tempBitmap & mask);
         // TODO: fix the constant here
         int firstSetBitBeforeMe = 64 - consecutiveZerosOnLeft - 1;
         return firstSetBitBeforeMe == -1 ? this->min : firstSetBitBeforeMe;
@@ -224,7 +233,7 @@ class VebKLeaf {
             // }
 
             // I'm deleting the min, so there must be a set of consecutive zeros on the LSB side of bitmap
-            int consecutiveZerosOnRight = countr_zero(this->bitmap);
+            int consecutiveZerosOnRight = custom::countr_zero(this->bitmap);
 
             this->min = consecutiveZerosOnRight;
 
@@ -256,7 +265,7 @@ class VebKLeaf {
             //         break;
             //     }
             // }
-            int consecutiveZerosOnLeft = countl_zero(this->bitmap);
+            int consecutiveZerosOnLeft = custom::countl_zero(this->bitmap);
             // TODO: fix the constant here
             int newMax = 64 - consecutiveZerosOnLeft - 1;
             this->max = newMax == -1 ? this->min : newMax;
@@ -267,7 +276,7 @@ class VebKLeaf {
 };
 
 class VebKInternal {
-   public:
+public:
     i64 u;
     VebKInternal **clusters;
     VebKInternal *summary;
@@ -966,7 +975,7 @@ class VebKInternal {
 
 template <typename V>
 class VebKVLeaf {
-   public:
+public:
     i64 u;
     volatile i64 min;
     volatile i64 max;
@@ -1020,7 +1029,7 @@ class VebKVLeaf {
         ui64 tempBitmap = this->bitmap;
         ui64 mask = 0xFFFFFFFFFFFFFFFFu << (x + 1);
 
-        i64 consecutiveZerosOnRight = countr_zero(tempBitmap & mask);
+        i64 consecutiveZerosOnRight = custom::countr_zero(tempBitmap & mask);
 
         // TODO: fix constant
         if (consecutiveZerosOnRight == 64) {
@@ -1070,7 +1079,7 @@ class VebKVLeaf {
         ui64 tempBitmap = this->bitmap;
         ui64 mask = ~(0xFFFFFFFFFFFFFFFFu << (x));
 
-        int consecutiveZerosOnLeft = countl_zero(tempBitmap & mask);
+        int consecutiveZerosOnLeft = custom::countl_zero(tempBitmap & mask);
         // TODO: fix the constant here
         int firstSetBitBeforeMe = 64 - consecutiveZerosOnLeft - 1;
         if (firstSetBitBeforeMe == -1) {
@@ -1211,7 +1220,7 @@ class VebKVLeaf {
         bool erased = false;
         if (x == this->min) {
             // I'm deleting the min, so there must be a set of consecutive zeros on the LSB side of bitmap
-            int consecutiveZerosOnRight = countr_zero(this->bitmap);
+            int consecutiveZerosOnRight = custom::countr_zero(this->bitmap);
 
             this->min = consecutiveZerosOnRight;
             this->minVal = this->vals[this->min];
@@ -1235,7 +1244,7 @@ class VebKVLeaf {
         this->vals[x] = (V) nullptr;
 
         if (x == this->max) {
-            int consecutiveZerosOnLeft = countl_zero(this->bitmap);
+            int consecutiveZerosOnLeft = custom::countl_zero(this->bitmap);
             // TODO: fix the constant here
             int newMax = 64 - consecutiveZerosOnLeft - 1;
             this->max = newMax == -1 ? this->min : newMax;
@@ -1247,7 +1256,7 @@ class VebKVLeaf {
 
 template <typename V>
 class VebKVInternal {
-   public:
+public:
     i64 u;
     VebKVInternal **clusters;
     VebKInternal *summary;
