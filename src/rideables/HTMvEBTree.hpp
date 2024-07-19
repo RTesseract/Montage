@@ -403,6 +403,7 @@ public:
     }
 
     void initThread(const int tid) {
+        Recoverable::init_thread(tid); 
         kMap.clear();
         populate_maps(HTMvEBTreeRange, false);
 
