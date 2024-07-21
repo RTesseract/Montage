@@ -20,7 +20,6 @@
         _mm_pause();                                 \
     }
 
-#if 1
 #define TLE(op, func, args)                    \
     int retriesLeft = MAX_RETRIES;             \
     int txnStatus;                             \
@@ -39,14 +38,6 @@
         retval = this->func(args);             \
         releaseLock(&globalLock);              \
     }
-
-#else
-#define TLE(op, func, args)                    \
-        acquireLock(&globalLock);              \
-        retval = this->func(args);             \
-        releaseLock(&globalLock);              \
-
-#endif
 
 #define CUTOFF 2
 #define CUTOFF_POWER 0
@@ -80,15 +71,6 @@ template <class K>
 class HTMvEBTree : public RSet<K>, public Recoverable
 {
 public:
-    class Payload : public pds::PBlk
-    {
-        GENERATE_FIELD(K, key, Payload); 
-    public:
-        Payload() {}
-        Payload(K key): m_key(key) {}
-        Payload(const Payload& oth): PBlk(oth), m_key(oth.m_key){}
-        void persist() {}
-    };
     class HTMvEBTreeNode
     {
     public:
@@ -100,7 +82,6 @@ public:
         volatile i64 min;
         volatile i64 max;
         // PAD;
-        Payload *payload;
 
         HTMvEBTreeNode(i64 u, HTMvEBTree *ds): _ds(ds) {
             this->u = u;
