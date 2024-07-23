@@ -15,11 +15,7 @@
 #define MAX_RETRIES 35
 #define PAUSE_COUNT 2
 
-#define PAUSE()                                      \
-    for (int __pc = 0; __pc < PAUSE_COUNT; ++__pc) { \
-        _mm_pause();                                 \
-    }
-
+#if 1
 #define TLE(op, func, args)                    \
     int retriesLeft = MAX_RETRIES;             \
     int txnStatus;                             \
@@ -31,13 +27,21 @@
         _xend();                               \
     } else {                                   \
         while (readLock(&globalLock)) {        \
-            PAUSE();                           \
+            for (int __pc = 0; __pc < PAUSE_COUNT; ++__pc) { \
+                _mm_pause();                                 \
+            } \
         }                                      \
         if (--retriesLeft > 0) goto retry;     \
         acquireLock(&globalLock);              \
         retval = this->func(args);             \
         releaseLock(&globalLock);              \
     }
+#else
+#define TLE(op, func, args)                \
+    acquireLock(&globalLock);              \
+    retval = this->func(args);             \
+    releaseLock(&globalLock);
+#endif
 
 #define CUTOFF 2
 #define CUTOFF_POWER 0
@@ -58,26 +62,84 @@ typedef struct {
 } UniverseInfo;
 
 PAD;
-volatile int globalLock = 0;
+volatile int globalLock = 0, HTMvEBTreeRange;
 PAD;
 thread_local map<i64, UniverseInfo> kMap;     // for key-only structures
 
-template <class K>
-class HTMvEBTree;
+static UniverseInfo divide_node(i64 u, int cutoffPower, bool isKV) {
+    // first field is the number of clusters (size of summary)
+    // second field of the size of each cluster
+    UniverseInfo res;
+    i64 lowerPower, lowerRoot, upperPower, upperRoot;
 
-inline int HTMvEBTreeRange;
+    double powers = log2(u);
+
+    lowerPower = floor(powers / 2);
+    upperPower = ceil(powers / 2);
+
+    // #ifdef SHARD_24
+    //     if (powers > 24) {
+    //         lowerPower = 24;
+    //         upperPower = powers - 24;
+    //     } else if (powers < 24 && powers > 12) { 
+    //         lowerPower = 12;
+    //         upperPower = powers - 12;
+    //     }
+    // #endif
+
+    // #ifdef FORCE_64_KV
+    //     if (isKV) {
+    //         while (lowerPower < cutoffPower && upperPower > 0) {
+    //             lowerPower++;
+    //             upperPower--;
+    //         }
+    //     }
+    // #endif
+
+    // #ifdef FORCE_64_K
+    //     if (!isKV) {
+    //         while (lowerPower < cutoffPower && upperPower > 0) {
+    //             lowerPower++;
+    //             upperPower--;
+    //         }
+    //     }
+    // #endif
+
+    lowerRoot = pow(2, lowerPower);  // size of each cluster
+    upperRoot = pow(2, upperPower);  // nClusters, size of summary
+
+    res.nClusters = upperRoot;
+    res.highBits = upperPower;
+    res.clusterSize = lowerRoot;
+    res.lowBits = lowerPower;
+    res.lowMask = lowerRoot - 1;
+
+    return res;
+}
+
+void populate_maps(i64 _u, bool isKV) {
+    // printf("handling %ld as %s\n", _u, (isKV ? "KV" : "K"));
+    UniverseInfo ui = divide_node(_u, CUTOFF_POWER, isKV);
+
+    if (kMap.find(_u) == kMap.end()) {
+        kMap.insert(pair<i64, UniverseInfo>(_u, ui));
+    }
+
+    if (_u > CUTOFF) {
+        populate_maps(ui.nClusters, false);
+        populate_maps(ui.clusterSize, false);
+    }
+}
 
 template <class K>
-class HTMvEBTree : public RSet<K>, public Recoverable
-{
+class HTMvEBTree : public RSet<K>, public Recoverable {
 public:
-    class HTMvEBTreeNode
-    {
+    class HTMvEBTreeNode {
     public:
-        HTMvEBTree *_ds;
         i64 u;
         HTMvEBTreeNode **clusters;
         HTMvEBTreeNode *summary;
+        HTMvEBTree *const _ds;
         // PAD;
         volatile i64 min;
         volatile i64 max;
@@ -96,7 +158,7 @@ public:
                 if (kMap.find(u) != kMap.end()) {
                     ui = kMap[u];
                 } else {
-                    ui = HTMvEBTree<K>::divide_node(u, CUTOFF_POWER, false);
+                    ui = divide_node(u, CUTOFF_POWER, false);
                 }
 
                 this->summary = new HTMvEBTreeNode(ui.nClusters, ds);
@@ -318,70 +380,7 @@ public:
 
     HTMvEBTree(GlobalTestConfig* gtc): Recoverable(gtc), root(new HTMvEBTreeNode(HTMvEBTreeRange, this)) {}
 
-    static UniverseInfo divide_node(i64 u, int cutoffPower, bool isKV) {
-        // first field is the number of clusters (size of summary)
-        // second field of the size of each cluster
-        UniverseInfo res;
-        i64 lowerPower, lowerRoot, upperPower, upperRoot;
-
-        double powers = log2(u);
-
-        lowerPower = floor(powers / 2);
-        upperPower = ceil(powers / 2);
-
-        // #ifdef SHARD_24
-        //     if (powers > 24) {
-        //         lowerPower = 24;
-        //         upperPower = powers - 24;
-        //     } else if (powers < 24 && powers > 12) { 
-        //         lowerPower = 12;
-        //         upperPower = powers - 12;
-        //     }
-        // #endif
-
-        // #ifdef FORCE_64_KV
-        //     if (isKV) {
-        //         while (lowerPower < cutoffPower && upperPower > 0) {
-        //             lowerPower++;
-        //             upperPower--;
-        //         }
-        //     }
-        // #endif
-
-        // #ifdef FORCE_64_K
-        //     if (!isKV) {
-        //         while (lowerPower < cutoffPower && upperPower > 0) {
-        //             lowerPower++;
-        //             upperPower--;
-        //         }
-        //     }
-        // #endif
-
-        lowerRoot = pow(2, lowerPower);  // size of each cluster
-        upperRoot = pow(2, upperPower);  // nClusters, size of summary
-
-        res.nClusters = upperRoot;
-        res.highBits = upperPower;
-        res.clusterSize = lowerRoot;
-        res.lowBits = lowerPower;
-        res.lowMask = lowerRoot - 1;
-
-        return res;
-    }
-
-    void populate_maps(i64 _u, bool isKV) {
-        // printf("handling %ld as %s\n", _u, (isKV ? "KV" : "K"));
-        UniverseInfo ui = divide_node(_u, CUTOFF_POWER, isKV);
-
-        if (kMap.find(_u) == kMap.end()) {
-            kMap.insert(pair<i64, UniverseInfo>(_u, ui));
-        }
-
-        if (_u > CUTOFF) {
-            populate_maps(ui.nClusters, false);
-            populate_maps(ui.clusterSize, false);
-        }
-    }
+    ~HTMvEBTree() { delete root; }
 
     void initThread(const int tid) {
         Recoverable::init_thread(tid); 
@@ -406,18 +405,15 @@ public:
     bool insert(K key, int tid) override { return root->insertDriver(tid, key); }
     bool remove(K key, int tid) override { return root->delDriver(tid, key); }
 
-    int recover() override
-    {
+    int recover() override {
         errexit("recover of HTMvEBTree not implemented.");
         return 0;
     }
 };
 
 template <class T> 
-class HTMvEBTreeFactory : public RideableFactory
-{
-    Rideable* build(GlobalTestConfig* gtc)
-    {
+class HTMvEBTreeFactory : public RideableFactory {
+    Rideable* build(GlobalTestConfig* gtc) {
         return new HTMvEBTree<T>(gtc);
     }
 };

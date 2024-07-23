@@ -68,7 +68,6 @@ def main():
     if not exists('./bin/main'):
         print('Executable not found. Please compile first.')
         return
-    system('clear')
     if s == 'g':
         for rideable in rideables:
             for test in tests:
