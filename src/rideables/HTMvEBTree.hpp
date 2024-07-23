@@ -62,7 +62,8 @@ typedef struct {
 } UniverseInfo;
 
 PAD;
-volatile int globalLock = 0, HTMvEBTreeRange;
+volatile int globalLock = 0;
+int HTMvEBTreeRange;
 PAD;
 thread_local map<i64, UniverseInfo> kMap;     // for key-only structures
 
