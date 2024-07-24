@@ -135,18 +135,24 @@ void populate_maps(i64 _u, bool isKV) {
 template <class K>
 class HTMvEBTree : public RSet<K>, public Recoverable {
 public:
+    class Payload : public pds::PBlk {
+        GENERATE_FIELD(K, key, Payload);
+    public:
+        Payload(K key): m_key(key) {}
+    };
     class HTMvEBTreeNode {
     public:
         i64 u;
         HTMvEBTreeNode **clusters;
         HTMvEBTreeNode *summary;
+        Payload *payload;
         HTMvEBTree *const _ds;
         // PAD;
         volatile i64 min;
         volatile i64 max;
         // PAD;
 
-        HTMvEBTreeNode(i64 u, HTMvEBTree *ds): _ds(ds) {
+        HTMvEBTreeNode(i64 u, HTMvEBTree *ds): _ds(ds), payload(nullptr) {
             this->u = u;
             this->min = -1;
             this->max = -1;
