@@ -152,7 +152,7 @@ public:
         volatile i64 max;
         // PAD;
 
-        HTMvEBTreeNode(i64 u, HTMvEBTree *ds): _ds(ds), payload(nullptr) {
+        HTMvEBTreeNode(i64 u, HTMvEBTree *ds): _ds(ds), payload(ds->pnew<Payload>(-1)) {
             this->u = u;
             this->min = -1;
             this->max = -1;
@@ -189,6 +189,7 @@ public:
                 }
                 delete[] this->clusters;
             }
+            _ds->pdelete(payload);
         }
 
         void insertToEmptyVEB(i64 x) {
@@ -196,7 +197,7 @@ public:
             this->max = x;
         }
 
-        bool insert(i64 x) {
+        bool insert(i64 x, bool insertPayload = false) {
             // AVOID RE-INSERTING THE MINIMUM OR THE MAXIMUM INSIDE THE CLUSTER
             if (x == this->min || x == this->max) {
                 return false;
@@ -205,6 +206,8 @@ public:
             // easy case: tree is empty
             if (this->min == -1) {
                 this->insertToEmptyVEB(x);
+                if (insertPayload)
+                    payload->set_unsafe_key(_ds, x);
                 return true;
             }
 
@@ -235,11 +238,13 @@ public:
                     this->summary->insert(h);
                     this->clusters[h]->insertToEmptyVEB(l);
                     inserted = true;
+                    if (insertPayload)
+                        payload->set_unsafe_key(_ds, x);
                 }
 
                 // the corresponding cluster already has some elements
                 else {
-                    inserted = this->clusters[h]->insert(l);
+                    inserted = this->clusters[h]->insert(l, true);
                 }
             }
 
@@ -253,7 +258,7 @@ public:
             return inserted;
         }
 
-        bool del(i64 x) {
+        bool del(i64 x, bool delPayload = false) {
             // significantly improves throughput
             if (x > this->max || x < this->min) {
                 return false;
@@ -264,6 +269,8 @@ public:
                 if (this->min == x) {
                     this->min = -1;
                     this->max = -1;
+                    if (delPayload)
+                        payload->set_unsafe_key(_ds, -1);
                     return true;
                 }
                 // else {
@@ -280,7 +287,8 @@ public:
                 // delete it and set min and max accordingly
                 this->min = 1 - x;
                 this->max = this->min;
-
+                if (delPayload)
+                    payload->set_unsafe_key(_ds, -1);
                 return true;
             }
 
@@ -302,7 +310,7 @@ public:
             i64 l = LOW(x, ui);
             bool erased;
             // now delete x from the cluster
-            erased = this->clusters[h]->del(l);
+            erased = this->clusters[h]->del(l, true);
 
             // if successfully deleted x and the cluster is empty now
             if (this->clusters[h]->min == -1) {
@@ -341,6 +349,8 @@ public:
             else if (x == this->max) {
                 this->max = INDEX(h, this->clusters[h]->max, ui);
             }
+            if (delPayload)
+                payload->set_unsafe_key(_ds, -1);
             return erased;
         }
 
