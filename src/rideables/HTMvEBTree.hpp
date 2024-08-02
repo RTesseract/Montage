@@ -42,6 +42,7 @@
 
 #define CUTOFF 2
 #define CUTOFF_POWER 0
+#define COMMA ,
 
 #define LOW(x, ui) ((x) & (ui.lowMask))
 #define HIGH(x, ui) ((x) >> (ui.lowBits))
@@ -63,6 +64,33 @@ volatile int globalLock = 0;
 int HTMvEBTreeRange;
 PAD;
 thread_local map<i64, UniverseInfo> kMap;     // for key-only structures
+thread_local bool oldSeeNew;
+
+#define VEB_TEST
+
+#ifdef VEB_TEST
+char *elems;
+ui64 total_insert;
+
+inline void init_elems() {
+    elems = new char[HTMvEBTreeRange];
+    for (i64 i = 0; i < HTMvEBTreeRange; ++i)
+        elems[i] = 0;
+    total_insert = 0;
+}
+
+inline void delete_elems() {
+    delete[] elems;
+}
+
+inline bool get_elems(i64 i) {
+    return elems[i] & 0x1;
+}
+
+inline void set_elems(i64 i, bool val) {
+    elems[i] = val ? 1 : 0;
+}
+#endif /* VEB_TEST */
 
 UniverseInfo divide_node(i64 u, int cutoffPower, bool isKV) {
     // first field is the number of clusters (size of summary)
@@ -132,6 +160,12 @@ void populate_maps(i64 _u, bool isKV) {
 template <class K>
 class HTMvEBTree : public RSet<K>, public Recoverable {
 private:
+    class Payload : public pds::PBlk {
+        GENERATE_FIELD(K, key, Payload);
+    public:
+        Payload(K key) : m_key(key) {}
+    };
+
     class HTMvEBTreeNode {
     public:
         i64 u;
@@ -142,8 +176,9 @@ private:
         volatile i64 min;
         volatile i64 max;
         // PAD;
+        Payload *pMin, *pMax;
 
-        HTMvEBTreeNode(i64 u, HTMvEBTree *ds): ds(ds) {
+        HTMvEBTreeNode(i64 u, HTMvEBTree *ds): ds(ds), pMin(nullptr), pMax(nullptr) {
             this->u = u;
             this->min = -1;
             this->max = -1;
@@ -181,12 +216,27 @@ private:
             }
         }
 
-        void insertToEmptyVEB(i64 x) {
-            this->min = x;
-            this->max = x;
+        bool member(i64 x, K key) {
+            if (key == pMin->get_key(ds)) return true;
+            if (x == this->max) return true;
+            if (this->u == 2) {
+                // if it's neither min nor max, and we can't recurse any further, we're done
+                return false;
+            }
+            UniverseInfo ui = kMap[this->u];
+
+            i64 h = HIGH(x, ui);
+
+            return this->clusters[h]->member(LOW(x, ui), key);
         }
 
-        bool insert(i64 x) {
+        void insertToEmptyVEB(i64 x, Payload *payload) {
+            this->min = x;
+            this->max = x;
+            pMin = payload;
+        }
+
+        bool insert(i64 x, Payload *payload) {
             // AVOID RE-INSERTING THE MINIMUM OR THE MAXIMUM INSIDE THE CLUSTER
             if (x == this->min || x == this->max) {
                 return false;
@@ -194,7 +244,7 @@ private:
 
             // easy case: tree is empty
             if (this->min == -1) {
-                this->insertToEmptyVEB(x);
+                this->insertToEmptyVEB(x, payload);
                 return true;
             }
 
@@ -211,6 +261,10 @@ private:
                 i64 temp = x;
                 x = this->min;
                 this->min = temp;
+
+                Payload *pTemp = payload;
+                payload = pMin;
+                pMin = pTemp;
             }
 
             if (this->u > 2) {
@@ -222,13 +276,13 @@ private:
                 // the corresponding cluster is empty
                 if (this->clusters[h]->min == -1) {
                     // this->allocateSummaryIfNeeded();
-                    this->summary->insert(h);
-                    this->clusters[h]->insertToEmptyVEB(l);
+                    this->summary->insert(h, payload);
+                    this->clusters[h]->insertToEmptyVEB(l, payload);
                     inserted = true;
                 }
                 // the corresponding cluster already has some elements
                 else {
-                    inserted = this->clusters[h]->insert(l);
+                    inserted = this->clusters[h]->insert(l, payload);
                 }
             }
 
@@ -238,8 +292,21 @@ private:
                 // inserted = true;
 
                 this->max = x;
+                pMax = payload;
             }
             return inserted;
+        }
+
+        inline bool delPayload(Payload **payload) {
+            if (ds->check_epoch()) {
+                ds->pretire(*payload);
+                *payload = nullptr;
+                return true;
+            } else {
+                ds->abort_op();
+                oldSeeNew = true;
+                return false;
+            }
         }
 
         bool del(i64 x) {
@@ -253,6 +320,8 @@ private:
                 if (this->min == x) {
                     this->min = -1;
                     this->max = -1;
+
+                    if (!delPayload(&pMin)) return false;
                     return true;
                 }
                 // else {
@@ -270,6 +339,9 @@ private:
                 this->min = 1 - x;
                 this->max = this->min;
 
+                if (!delPayload(&pMin)) return false;
+                if (!delPayload(&pMax)) return false;
+
                 return true;
             }
 
@@ -284,6 +356,8 @@ private:
                 i64 firstCluster = this->summary->min;
                 x = INDEX(firstCluster, this->clusters[firstCluster]->min, ui);
                 this->min = x;
+
+                // pMin = this->clusters[firstCluster]->pMin;
             }
 
             i64 h = HIGH(x, ui);
@@ -310,8 +384,12 @@ private:
                     // only 1 elem remaining
                     if (summaryMax == -1) {
                         this->max = this->min;
+
+                        // pMax = pMin;
                     } else {
                         this->max = INDEX(summaryMax, this->clusters[summaryMax]->max, ui);
+
+                        // pMax = this->clusters[summaryMax]->pMax;
                     }
                 }
 
@@ -327,6 +405,8 @@ private:
             // if it's equal to max, it's been deleted
             else if (x == this->max) {
                 this->max = INDEX(h, this->clusters[h]->max, ui);
+
+                // pMax = this->clusters[h]->pMax;
             }
             return erased;
         }
@@ -359,10 +439,20 @@ public:
     bool get(K key, int tid) override { return true; }
     void put(K key, int tid) override {}
 
+    bool member(K key, int tid) {
+        bool retval = false;
+        begin_op();
+        TLE(root->member, key COMMA key);
+        end_op();
+        return retval;
+    }
+
     bool insert(K key, int tid) override {
         bool retval = false;
         begin_op();
-        TLE(root->insert, key);
+        Payload *payload = pnew<Payload>(key);
+        TLE(root->insert, key COMMA payload);
+        // if (!retval) pdelete(payload);
         end_op();
         // if (retval) {
         //     for (auto it = kToRefill.begin(); it != kToRefill.end(); ++it) {
@@ -377,10 +467,13 @@ public:
     }
 
     bool remove(K key, int tid) override {
-        bool retval = false;
-        begin_op();
-        TLE(root->del, key);
-        end_op();
+        bool retval;
+        do {
+            retval = false;
+            begin_op();
+            TLE(root->del, key);
+            end_op();
+        } while (oldSeeNew);
         // if (retval) {
         //     for (auto it = kToReclaim.begin(); it != kToReclaim.end(); ++it) {
         //         HTMvEBTreeNode *temp = (HTMvEBTreeNode *)*it;

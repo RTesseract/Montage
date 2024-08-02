@@ -26,6 +26,9 @@ public:
 		if (!s) {
 			 errexit("vEBChurnTest must be run on HTMvEBTree<T> type object.");
 		}
+#ifdef VEB_TEST
+		init_elems();
+#endif /* VEB_TEST */
 	}
 
 	void parInit(GlobalTestConfig* gtc, LocalTestConfig* ltc) override {
@@ -57,6 +60,8 @@ public:
 	void operation(uint64_t key, int op, int tid){
 		T k = this->fromInt(key);
 		// printf("%d.\n", r);
+
+		oldSeeNew = false;
 		
 		if(op<this->prop_gets){
 			s->get(k,tid);
@@ -65,13 +70,51 @@ public:
 			s->put(k,tid);
 		}
 		else if(op<this->prop_inserts){
+#ifdef VEB_TEST
+			acquireLock(&globalLock);
+			set_elems(key, true);
+			++total_insert;
+			releaseLock(&globalLock);
+#endif /* VEB_TEST */
 			s->insert(k,tid);
 		}
 		else{ // op<=prop_removes
+#ifdef VEB_TEST
+			acquireLock(&globalLock);
+			set_elems(key, false);
+			releaseLock(&globalLock);
+#endif /* VEB_TEST */
 			s->remove(k,tid);
 		}
 	}
 	void cleanup(GlobalTestConfig* gtc){
+#ifdef VEB_TEST
+		ofstream out("out.txt", ios::app);
+		// out << "total_insert: " << total_insert << ", arr:";
+		out << "total_insert: " << total_insert << "\n";
+		// for (i64 i = 0; i < HTMvEBTreeRange; ++i)
+		// 	out << ", " << elems[i];
+		// out << "\nmember?: ";
+		// for (i64 i = 0; i < HTMvEBTreeRange; ++i)
+		// 	out << ", " << s->member(i, 0) ? "T" : "F";
+		// out << "\n";
+		bool in_set, inserted;
+		for (i64 key = 0; key < HTMvEBTreeRange; ++key) {
+			in_set = get_elems(key);
+			inserted = s->member(key, 0);
+			if (in_set)
+				if (inserted)
+					;
+				else
+					out << "TF" << key << "\n"; // less
+			else
+				if (inserted)
+					out << "FT" << key << "\n"; // more
+				else
+					;
+		}
+		delete_elems();
+#endif /* VEB_TEST */
 		ChurnTest::cleanup(gtc);
 		delete s;
 	}
