@@ -70,13 +70,14 @@ thread_local bool oldSeeNew;
 
 #ifdef VEB_TEST
 char *elems;
-ui64 total_insert;
+ui64 total_insert, total_delete;
 
 inline void init_elems() {
     elems = new char[HTMvEBTreeRange];
     for (i64 i = 0; i < HTMvEBTreeRange; ++i)
         elems[i] = 0;
     total_insert = 0;
+    total_delete = 0;
 }
 
 inline void delete_elems() {
@@ -166,6 +167,8 @@ private:
         Payload(K key) : m_key(key) {}
     };
 
+    vector<Payload *> kToReclaim;
+
     class HTMvEBTreeNode {
     public:
         i64 u;
@@ -204,7 +207,7 @@ private:
 
         ~HTMvEBTreeNode() {
             if (this->u > 2) {
-                for (ui64 i = 0; i < kMap[this->u].nClusters; ++i) {
+                for (i64 i = 0; i < kMap[this->u].nClusters; ++i) {
                     if (this->clusters[i] != nullptr) {
                         delete this->clusters[i];
                     }
@@ -217,6 +220,7 @@ private:
         }
 
         bool member(i64 x, K key) {
+            if (!pMin) return false;
             if (key == pMin->get_key(ds)) return true;
             if (x == this->max) return true;
             if (this->u == 2) {
@@ -299,11 +303,10 @@ private:
 
         inline bool delPayload(Payload **payload) {
             if (ds->check_epoch()) {
-                ds->pretire(*payload);
+                ds->kToReclaim.emplace_back(*payload);
                 *payload = nullptr;
                 return true;
             } else {
-                ds->abort_op();
                 oldSeeNew = true;
                 return false;
             }
@@ -357,7 +360,7 @@ private:
                 x = INDEX(firstCluster, this->clusters[firstCluster]->min, ui);
                 this->min = x;
 
-                // pMin = this->clusters[firstCluster]->pMin;
+                if (!delPayload(&pMin)) return false;
             }
 
             i64 h = HIGH(x, ui);
@@ -385,11 +388,11 @@ private:
                     if (summaryMax == -1) {
                         this->max = this->min;
 
-                        // pMax = pMin;
+                        pMax = pMin;
                     } else {
                         this->max = INDEX(summaryMax, this->clusters[summaryMax]->max, ui);
 
-                        // pMax = this->clusters[summaryMax]->pMax;
+                        pMax = this->clusters[summaryMax]->pMax;
                     }
                 }
 
@@ -406,7 +409,7 @@ private:
             else if (x == this->max) {
                 this->max = INDEX(h, this->clusters[h]->max, ui);
 
-                // pMax = this->clusters[h]->pMax;
+                pMax = this->clusters[h]->pMax;
             }
             return erased;
         }
@@ -452,7 +455,7 @@ public:
         begin_op();
         Payload *payload = pnew<Payload>(key);
         TLE(root->insert, key COMMA payload);
-        // if (!retval) pdelete(payload);
+        // if (!retval) pretire(payload);
         end_op();
         // if (retval) {
         //     for (auto it = kToRefill.begin(); it != kToRefill.end(); ++it) {
@@ -468,12 +471,21 @@ public:
 
     bool remove(K key, int tid) override {
         bool retval;
-        do {
-            retval = false;
-            begin_op();
-            TLE(root->del, key);
+retry_remove:
+        kToReclaim.clear();
+        oldSeeNew = false;
+        retval = false;
+        begin_op();
+        TLE(root->del, key);
+        if (oldSeeNew) {
+            abort_op();
+            goto retry_remove;
+        }
+        else
             end_op();
-        } while (oldSeeNew);
+        // for (Payload *payload : kToReclaim)
+        //     pretire(payload);
+        kToReclaim.clear();
         // if (retval) {
         //     for (auto it = kToReclaim.begin(); it != kToReclaim.end(); ++it) {
         //         HTMvEBTreeNode *temp = (HTMvEBTreeNode *)*it;

@@ -60,8 +60,6 @@ public:
 	void operation(uint64_t key, int op, int tid){
 		T k = this->fromInt(key);
 		// printf("%d.\n", r);
-
-		oldSeeNew = false;
 		
 		if(op<this->prop_gets){
 			s->get(k,tid);
@@ -82,6 +80,7 @@ public:
 #ifdef VEB_TEST
 			acquireLock(&globalLock);
 			set_elems(key, false);
+			++total_delete;
 			releaseLock(&globalLock);
 #endif /* VEB_TEST */
 			s->remove(k,tid);
@@ -91,27 +90,23 @@ public:
 #ifdef VEB_TEST
 		ofstream out("out.txt", ios::app);
 		// out << "total_insert: " << total_insert << ", arr:";
-		out << "total_insert: " << total_insert << "\n";
+		out << "total_insert: " << total_insert << "\n" << "total_delete: " << total_delete << "\n";
 		// for (i64 i = 0; i < HTMvEBTreeRange; ++i)
 		// 	out << ", " << elems[i];
 		// out << "\nmember?: ";
 		// for (i64 i = 0; i < HTMvEBTreeRange; ++i)
 		// 	out << ", " << s->member(i, 0) ? "T" : "F";
 		// out << "\n";
-		bool in_set, inserted;
+		bool in_set, in_tree;
 		for (i64 key = 0; key < HTMvEBTreeRange; ++key) {
 			in_set = get_elems(key);
-			inserted = s->member(key, 0);
+			in_tree = s->member(key, 0);
 			if (in_set)
-				if (inserted)
-					;
-				else
+				if (!in_tree)
 					out << "TF" << key << "\n"; // less
 			else
-				if (inserted)
+				if (in_tree)
 					out << "FT" << key << "\n"; // more
-				else
-					;
 		}
 		delete_elems();
 #endif /* VEB_TEST */

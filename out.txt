@@ -1,0 +1,197 @@
+total_insert: 1755145
+total_delete: 1758199
+FT0
+TF3
+FT6
+TF10
+FT12
+total_insert: 1800389
+total_delete: 1801531
+TF4
+TF5
+TF6
+TF10
+TF13
+TF15
+total_insert: 1712051
+total_delete: 1713229
+FT0
+FT1
+TF6
+FT8
+FT10
+TF13
+FT14
+total_insert: 1500698
+total_delete: 1498086
+FT0
+FT1
+FT2
+FT3
+FT4
+FT6
+FT8
+TF9
+FT11
+FT13
+total_insert: 1457307
+total_delete: 1455461
+FT2
+TF3
+FT4
+FT6
+FT7
+FT8
+FT9
+FT13
+FT14
+total_insert: 1383918
+total_delete: 1381906
+FT0
+TF2
+TF3
+FT4
+FT6
+FT7
+FT8
+FT10
+FT12
+FT14
+FT15
+total_insert: 1415360
+total_delete: 1416000
+FT0
+TF2
+FT4
+FT7
+FT8
+FT9
+FT10
+FT12
+total_insert: 1423851
+total_delete: 1423381
+TF1
+TF3
+TF6
+TF7
+TF13
+TF15
+total_insert: 1401168
+total_delete: 1402032
+TF4
+TF5
+TF6
+TF8
+TF9
+TF10
+TF12
+TF13
+TF14
+total_insert: 1432872
+total_delete: 1431768
+FT0
+FT2
+FT3
+TF5
+TF6
+TF7
+FT8
+FT11
+FT12
+total_insert: 1466223
+total_delete: 1466513
+TF1
+TF3
+TF4
+TF5
+TF6
+TF8
+TF9
+TF10
+TF11
+TF12
+TF14
+total_insert: 1520472
+total_delete: 1517224
+FT0
+TF3
+TF6
+FT8
+FT10
+FT12
+FT13
+FT14
+FT15
+total_insert: 1548896
+total_delete: 1550240
+FT0
+TF2
+TF3
+FT4
+FT5
+FT7
+FT8
+FT9
+FT10
+FT11
+FT12
+FT14
+total_insert: 1568889
+total_delete: 1569671
+TF5
+TF6
+TF8
+TF10
+TF11
+TF12
+total_insert: 1598199
+total_delete: 1598729
+FT0
+TF3
+FT4
+FT6
+FT7
+FT12
+TF13
+FT15
+total_insert: 1607899
+total_delete: 1608485
+TF3
+TF5
+TF13
+FT15
+total_insert: 1639909
+total_delete: 1642523
+FT1
+TF2
+TF3
+TF5
+TF6
+TF7
+FT9
+TF10
+FT11
+total_insert: 1645707
+total_delete: 1644917
+TF1
+TF2
+TF6
+TF7
+TF8
+TF9
+TF11
+TF15
+total_insert: 1655663
+total_delete: 1655441
+FT0
+FT1
+FT4
+FT6
+FT8
+FT11
+total_insert: 1612736
+total_delete: 1611328
+FT1
+TF3
+TF7
+FT13
