@@ -4,6 +4,7 @@ from typing import List
 from os import system
 from os.path import exists
 from re import compile
+from sys import argv
 
 int_range = compile(r'(\d+)(?:[~-](\d+))?')
 
@@ -29,7 +30,12 @@ Task?: """
 def main():
     s: str = ''
     while True:
-        s = input(prompt)
+        if len(argv) > 0:
+            s = argv[0]
+            argv.pop(0)
+        else:
+            s = input(prompt)
+
         if s == 'c':
             system('rm -f /mnt/pmem/zsu8_* && clear')
         elif s == 'b':
