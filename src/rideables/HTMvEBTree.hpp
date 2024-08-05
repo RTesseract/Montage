@@ -12,34 +12,33 @@
 #include <immintrin.h>
 #include "GlobalLock.hpp"
 
+#if 0
+
 #define MAX_RETRIES 35
 #define PAUSE_COUNT 2
 
-#if 1
-#define TLE(op, func, args)                    \
-    int retriesLeft = MAX_RETRIES;             \
-    int txnStatus;                             \
-    retry:                                     \
-    txnStatus = _xbegin();                     \
-    if (txnStatus == _XBEGIN_STARTED) {        \
-        if (readLock(&globalLock)) _xabort(0); \
-        retval = this->func(args);             \
-        _xend();                               \
-    } else {                                   \
-        while (readLock(&globalLock)) {        \
-            for (int __pc = 0; __pc < PAUSE_COUNT; ++__pc) { \
-                _mm_pause();                                 \
-            } \
-        }                                      \
-        if (--retriesLeft > 0) goto retry;     \
-        acquireLock(&globalLock);              \
-        retval = this->func(args);             \
-        releaseLock(&globalLock);              \
+#define TLE(func, args)                                     \
+    int retriesLeft = MAX_RETRIES;                          \
+    unsigned int txnStatus;                                 \
+retry:                                                      \
+    txnStatus = _xbegin();                                  \
+    if (txnStatus == _XBEGIN_STARTED) {                     \
+        if (readLock(&globalLock)) _xabort(0);              \
+        retval = this->func(args);                          \
+        _xend();                                            \
+    } else {                                                \
+        while (readLock(&globalLock))                       \
+            for (int __pc = 0; __pc < PAUSE_COUNT; ++__pc)  \
+                _mm_pause();                                \
+        if (--retriesLeft > 0) goto retry;                  \
+        acquireLock(&globalLock);                           \
+        retval = this->func(args);                          \
+        releaseLock(&globalLock);                           \
     }
 #else
-#define TLE(op, func, args)                \
-    acquireLock(&globalLock);              \
-    retval = this->func(args);             \
+#define TLE(func, args)         \
+    acquireLock(&globalLock);   \
+    retval = this->func(args);  \
     releaseLock(&globalLock);
 #endif
 
@@ -53,13 +52,13 @@
 typedef int64_t i64;
 typedef uint64_t ui64;
 
-typedef struct {
+struct UniverseInfo {
     i64 clusterSize;  // size of each cluster (lowerRoot)
     i64 nClusters;    // size of summary (nClusters) (upperRoot)
     i64 lowBits;      // (lowerPower)
     i64 highBits;     // (lowerRoot)
     i64 lowMask;      // clusterSize - 1
-} UniverseInfo;
+};
 
 PAD;
 volatile int globalLock = 0;
@@ -67,7 +66,7 @@ int HTMvEBTreeRange;
 PAD;
 thread_local map<i64, UniverseInfo> kMap;     // for key-only structures
 
-static UniverseInfo divide_node(i64 u, int cutoffPower, bool isKV) {
+UniverseInfo divide_node(i64 u, int cutoffPower, bool isKV) {
     // first field is the number of clusters (size of summary)
     // second field of the size of each cluster
     UniverseInfo res;
@@ -135,18 +134,18 @@ void populate_maps(i64 _u, bool isKV) {
 template <class K>
 class HTMvEBTree : public RSet<K>, public Recoverable {
 public:
-    class HTMvEBTreeNode {
+    class Node {
     public:
         i64 u;
-        HTMvEBTreeNode **clusters;
-        HTMvEBTreeNode *summary;
-        HTMvEBTree *const _ds;
+        Node **clusters;
+        Node *summary;
+        HTMvEBTree *const ds;
         // PAD;
         volatile i64 min;
         volatile i64 max;
         // PAD;
 
-        HTMvEBTreeNode(i64 u, HTMvEBTree *ds): _ds(ds) {
+        Node(i64 u, HTMvEBTree *ds): ds(ds) {
             this->u = u;
             this->min = -1;
             this->max = -1;
@@ -162,16 +161,16 @@ public:
                     ui = divide_node(u, CUTOFF_POWER, false);
                 }
 
-                this->summary = new HTMvEBTreeNode(ui.nClusters, ds);
+                this->summary = new Node(ui.nClusters, ds);
 
-                this->clusters = new HTMvEBTreeNode *[ui.nClusters];
+                this->clusters = new Node *[ui.nClusters];
                 for (i64 i = 0; i < ui.nClusters; ++i) { 
-                    this->clusters[i] = new HTMvEBTreeNode(ui.clusterSize, ds);
+                    this->clusters[i] = new Node(ui.clusterSize, ds);
                 }
             }
         }
 
-        ~HTMvEBTreeNode() {
+        ~Node() {
             if (this->u > 2) {
                 for (ui64 i = 0; i < kMap[this->u].nClusters; ++i) {
                     if (this->clusters[i] != nullptr) {
@@ -337,51 +336,50 @@ public:
             }
             return erased;
         }
-
-        bool insertDriver(const int tid, i64 x) {
-            bool retval = false;
-            _ds->begin_op();
-            TLE(INSERT, insert, x);
-            _ds->end_op();
-            // if (retval) {
-            //     for (auto it = kToRefill.begin(); it != kToRefill.end(); ++it) {
-            //         i64 neededSize = *it;
-            //         while (kPool[neededSize].size() < POINTERS_PER_POOL) {
-            //             kPool[neededSize].push_back((void *)new HTMvEBTreeNode(neededSize));
-            //         }
-            //     }
-            //     kToRefill.clear();
-            // }
-            return retval;
-        }
-
-        bool delDriver(const int tid, i64 x) {
-            bool retval = false;
-            _ds->begin_op();
-            TLE(DELETE, del, x);
-            _ds->end_op();
-            // if (retval) {
-            //     for (auto it = kToReclaim.begin(); it != kToReclaim.end(); ++it) {
-            //         HTMvEBTreeNode *temp = (HTMvEBTreeNode *)*it;
-            //         if (kPool[temp->u].size() < POINTERS_PER_POOL * POOL_GROW_COEFFICIENT) {
-            //             temp->makeMeReusable();
-            //             kPool[temp->u].push_back((void *)temp);
-            //         } else {
-            //             delete temp;
-            //         }
-            //     }
-            //     kToReclaim.clear();
-            // }
-            return retval;
-        }
     };
 
-public:
-    HTMvEBTreeNode *root;
+    Node *root;
 
-    HTMvEBTree(GlobalTestConfig* gtc): Recoverable(gtc), root(new HTMvEBTreeNode(HTMvEBTreeRange, this)) {}
+    HTMvEBTree(GlobalTestConfig* gtc): Recoverable(gtc), root(new Node(HTMvEBTreeRange, this)) {}
 
     ~HTMvEBTree() { delete root; }
+
+    bool insert(K key, int tid) override {
+        bool retval = false;
+        begin_op();
+        TLE(root->insert, key);
+        end_op();
+        // if (retval) {
+        //     for (auto it = kToRefill.begin(); it != kToRefill.end(); ++it) {
+        //         i64 neededSize = *it;
+        //         while (kPool[neededSize].size() < POINTERS_PER_POOL) {
+        //             kPool[neededSize].push_back((void *)new Node(neededSize));
+        //         }
+        //     }
+        //     kToRefill.clear();
+        // }
+        return retval;
+    }
+
+    bool remove(K key, int tid) override {
+        bool retval = false;
+        begin_op();
+        TLE(root->del, key);
+        end_op();
+        // if (retval) {
+        //     for (auto it = kToReclaim.begin(); it != kToReclaim.end(); ++it) {
+        //         Node *temp = (Node *)*it;
+        //         if (kPool[temp->u].size() < POINTERS_PER_POOL * POOL_GROW_COEFFICIENT) {
+        //             temp->makeMeReusable();
+        //             kPool[temp->u].push_back((void *)temp);
+        //         } else {
+        //             delete temp;
+        //         }
+        //     }
+        //     kToReclaim.clear();
+        // }
+        return retval;
+    }
 
     void initThread(const int tid) {
         Recoverable::init_thread(tid); 
@@ -393,7 +391,7 @@ public:
         //     UniverseInfo _ui = pair.second;
         //     // printf("kMap[%ld]={lowBits: %ld, highBits: %ld, nClusters: %ld, clusterSize: %ld}\n", _u, _ui.lowBits, _ui.highBits, _ui.nClusters, _ui.clusterSize);
         //     for (int i = 0; i < POINTERS_PER_POOL; ++i) {
-        //         kPool[_u].push_back((void *)new HTMvEBTreeNode(_u));
+        //         kPool[_u].push_back((void *)new Node(_u));
         //     }
         // }
     }
@@ -403,8 +401,6 @@ public:
 
     bool get(K key, int tid) override { return true; }
     void put(K key, int tid) override {}
-    bool insert(K key, int tid) override { return root->insertDriver(tid, key); }
-    bool remove(K key, int tid) override { return root->delDriver(tid, key); }
 
     int recover() override {
         errexit("recover of HTMvEBTree not implemented.");
