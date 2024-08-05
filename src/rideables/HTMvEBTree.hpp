@@ -12,7 +12,7 @@
 #include <immintrin.h>
 #include "GlobalLock.hpp"
 
-#if 0
+#if 1
 
 #define MAX_RETRIES 35
 #define PAUSE_COUNT 2
