@@ -29,6 +29,7 @@ Task?: """
 
 def main():
     s: str = ''
+    gdb: bool = False
     while True:
         if len(argv) > 0:
             s = argv[0]
@@ -46,12 +47,14 @@ def main():
         elif s == 'd':
             if system('make -j10 BUILD=debug') == 0:
                 system('./bin/main > nums.txt 2>&1')
-        elif s == 'u' or s == 'g' or s == 'x':
+        elif s == 'u':
+            gdb = False
             break
-        else:
-            continue
-    if s == 'x':
-        return
+        elif s == 'g':
+            gdb = True
+            break
+        elif s == 'x':
+            return
 
     rideables: List[int] = []
     while len(rideables) == 0:
@@ -74,12 +77,12 @@ def main():
     if not exists('./bin/main'):
         print('Executable not found. Please compile first.')
         return
-    if s == 'g':
+    if gdb:
         for rideable in rideables:
             for test in tests:
                 for thread in threads:
                     system('rm -f /mnt/pmem/zsu8_*')
-                    system(f'gdb -ex "run -r {rideable} -m {test} -t {thread}" -ex "bt" --args ./bin/main')
+                    system(f'gdb -q -batch -ex "run -r {rideable} -m {test} -t {thread}" -ex "bt" --args ./bin/main')
     else:
         for rideable in rideables:
             for test in tests:
@@ -91,6 +94,6 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        pass
+        print('\nrun.py: KeyboardInterrupt')
     except EOFError:
-        pass
+        print('\nrun.py: EOF')
