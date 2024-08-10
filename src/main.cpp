@@ -17,6 +17,7 @@
 // #include "MCASRBTree.hpp"
 // #include "MCASLinkList.hpp"
 // #include "MCASHMap.hpp"
+#include "MontageVEBTree.hpp"
 #include "MontageMSQueue.hpp"
 #include "MontageQueue.hpp"
 #include "MODQueue.hpp"
@@ -75,11 +76,12 @@
 #include "ProntoQueue.hpp"
 #include "ProntoHashTable.hpp"
 #endif
+#include "VEBChurnTest.hpp"
 // #include "Toy.hpp"
 #include "QueueTest.hpp"
 #include "KVTest.hpp"
 #include "YCSBTest.hpp"
-#include "GraphTest.hpp"
+// #include "GraphTest.hpp"
 
 #include "MapVerify.hpp"
 #include "QueueChurnTest.hpp"
@@ -107,6 +109,7 @@ int main(int argc, char *argv[])
 	const int meanEdgesPerVertex = 32;
 	const int vertexLoad = 50;
 
+	gtc.addRideableOption(new MontageVEBTreeFactory<int>(), "MontageVEBTree");
 	/* queues */
 
 #if !defined(MNEMOSYNE) and !defined(PRONTO)
@@ -170,6 +173,12 @@ int main(int argc, char *argv[])
 	gtc.addRideableOption(new ProntoQueueFactory(), "ProntoQueue");
 	gtc.addRideableOption(new ProntoHashTableFactory(), "ProntoHashTable");
 #endif
+	gtc.addTestOption(new VEBChurnTest<int>(0, 0, 100, 0, 2), "VEBChurn:u2:i100rm0");
+	gtc.addTestOption(new VEBChurnTest<int>(0, 0, 50, 50, 2), "VEBChurn:u2:i50rm50");
+	gtc.addTestOption(new VEBChurnTest<int>(0, 0, 100, 0, 16), "VEBChurn:u16:i100rm0");
+	gtc.addTestOption(new VEBChurnTest<int>(0, 0, 50, 50, 16), "VEBChurn:u16:i50rm50");
+	gtc.addTestOption(new VEBChurnTest<int>(0, 0, 100, 0, 1 << 18), "VEBChurn:u1<<18:i100rm0");
+	gtc.addTestOption(new VEBChurnTest<int>(0, 0, 50, 50, 1 << 18), "VEBChurn:u1<<18:i50rm50");
 	gtc.addTestOption(new QueueChurnTest(50,50,2000), "QueueChurn:eq50dq50:prefill=2000");
 	gtc.addTestOption(new QueueTest(5000000,50), "Queue:5m");
 	gtc.addTestOption(new MapChurnTest<string,string>(0, 0, 50, 50, 1000000, 500000), "MapChurnTest<string>:g0p0i50rm50:range=1000000:prefill=500000");
@@ -188,8 +197,8 @@ int main(int argc, char *argv[])
 #ifndef MNEMOSYNE
 	gtc.addTestOption(new RecoverVerifyTest<string,string>(&gtc), "RecoverVerifyTest");
 
-	gtc.addTestOption(new GraphTest(numVertices, meanEdgesPerVertex,vertexLoad,8000), "GraphTest:80edge20vertex:degree32");
-	gtc.addTestOption(new GraphTest(numVertices, meanEdgesPerVertex,vertexLoad,9980), "GraphTest:99.8edge.2vertex:degree32");
+	// gtc.addTestOption(new GraphTest(numVertices, meanEdgesPerVertex,vertexLoad,8000), "GraphTest:80edge20vertex:degree32");
+	// gtc.addTestOption(new GraphTest(numVertices, meanEdgesPerVertex,vertexLoad,9980), "GraphTest:99.8edge.2vertex:degree32");
 	// gtc.addTestOption(new GraphRecoveryTest("graph_data/", "orkut-edge-list_", 28610, 5, true), "GraphRecoveryTest:Orkut:verify");
     gtc.addTestOption(new GraphRecoveryTest(&gtc, "graph_data/", "orkut-edge-list_", 28610, 5, false), "GraphRecoveryTest:Orkut:noverify");
     gtc.addTestOption(new TGraphConstructionTest("graph_data/", "orkut-edge-list_", 28610, 5), "TGraphConstructionTest:Orkut");
