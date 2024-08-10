@@ -360,7 +360,7 @@ public:
 
     ~HTMvEBTree() { delete root; }
 
-    bool insert(K key, int tid) override {
+    bool insert(K key, int tid) {
         bool retval = false;
         begin_op();
         TLE(root->insert, key);
@@ -377,7 +377,7 @@ public:
         return retval;
     }
 
-    bool remove(K key, int tid) override {
+    bool remove(K key, int tid) {
         bool retval = false;
         begin_op();
         TLE(root->del, key);
@@ -394,6 +394,14 @@ public:
         //     }
         //     kToReclaim.clear();
         // }
+        return retval;
+    }
+
+    bool member(K key, int tid) {
+        bool retval = false;
+        begin_op();
+        TLE(root->member, key);
+        end_op();
         return retval;
     }
 

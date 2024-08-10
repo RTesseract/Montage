@@ -7,10 +7,55 @@
 #include "ChurnTest.hpp"
 #include "TestConfig.hpp"
 #include "HTMvEBTree.hpp"
+#ifdef VEB_TEST
+#include <cstdio>
+#endif /* VEB_TEST */
 
 template <class T>
 class vEBChurnTest : public ChurnTest{
 public:
+#ifdef VEB_TEST
+	unsigned char *bitmap;
+	FILE *fp;
+
+	inline void init() {
+		bitmap = new unsigned char[HTMvEBTreeRange / 8 + 1]();
+		fp = fopen("veb.log", "w");
+		fclose(fp);
+	}
+
+	inline void deinit() {
+		delete[] bitmap;
+	}
+
+	inline void set(i64 x) {
+		acquireLock(&globalLock);
+		bitmap[x / 8] |= 1 << (x % 8);
+		releaseLock(&globalLock);
+	}
+
+	inline void unset(i64 x) {
+		acquireLock(&globalLock);
+		bitmap[x / 8] &= ~(1 << (x % 8));
+		releaseLock(&globalLock);
+	}
+
+	inline bool get(i64 x) {
+		return bitmap[x / 8] & (1 << (x % 8));
+	}
+
+	inline void print(const char *format, i64 x) {
+		acquireLock(&globalLock);
+		fp = fopen("veb.log", "a");
+		fprintf(fp, format, x);
+		for (int i = 0; i < HTMvEBTreeRange; ++i)
+			fprintf(fp, !i + ",%c", get(i) ? 'T' : 'F');
+		fputc('\n', fp);
+		fclose(fp);
+		releaseLock(&globalLock);
+	}
+#endif /* VEB_TEST */
+
 	HTMvEBTree<T>* s;
 	char occurences[INT_MAX];
 
