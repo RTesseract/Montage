@@ -12,6 +12,7 @@
 #include <immintrin.h>
 #include "GlobalLock.hpp"
 
+#define VEB_DEBUG
 #if 1
 
 #define MAX_RETRIES 35
@@ -172,7 +173,7 @@ public:
 
         ~Node() {
             if (this->u > 2) {
-                for (ui64 i = 0; i < kMap[this->u].nClusters; ++i) {
+                for (i64 i = 0; i < kMap[this->u].nClusters; ++i) {
                     if (this->clusters[i] != nullptr) {
                         delete this->clusters[i];
                     }
@@ -336,6 +337,21 @@ public:
             }
             return erased;
         }
+
+        bool member(i64 x) {
+            if (x == this->min || x == this->max) {
+                return true;
+            }
+            if (this->u == 2) {
+                // if it's neither min nor max, and we can't recurse any further, we're done
+                return false;
+            }
+            UniverseInfo ui = kMap[this->u];
+
+            i64 h = HIGH(x, ui);
+
+            return this->clusters[h]->member(LOW(x, ui));
+        }
     };
 
     Node *root;
@@ -378,6 +394,14 @@ public:
         //     }
         //     kToReclaim.clear();
         // }
+        return retval;
+    }
+
+    bool member(K key, int tid) {
+        bool retval = false;
+        begin_op();
+        TLE(root->member, key);
+        end_op();
         return retval;
     }
 

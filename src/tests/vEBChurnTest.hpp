@@ -12,6 +12,7 @@ template <class T>
 class vEBChurnTest : public ChurnTest{
 public:
 	HTMvEBTree<T>* s;
+	char occurences[INT_MAX];
 
 	vEBChurnTest(int p_gets, int p_puts, int p_inserts, int p_removes, int range, int prefill):
 		ChurnTest(p_gets, p_puts, p_inserts, p_removes, range, prefill){ HTMvEBTreeRange = range; }
@@ -26,6 +27,8 @@ public:
 		if (!s) {
 			 errexit("vEBChurnTest must be run on HTMvEBTree<T> type object.");
 		}
+		for (int i = 0; i < INT_MAX; ++i)
+			occurences[i] = 0;
 	}
 
 	void parInit(GlobalTestConfig* gtc, LocalTestConfig* ltc) override {
@@ -65,13 +68,37 @@ public:
 			s->put(k,tid);
 		}
 		else if(op<this->prop_inserts){
+#ifdef VEB_DEBUG
+			acquireLock(&globalLock);
+			occurences[key/8] |= 1 << (key%8);
+			releaseLock(&globalLock);
+#endif
 			s->insert(k,tid);
 		}
 		else{ // op<=prop_removes
+#ifdef VEB_DEBUG
+			acquireLock(&globalLock);
+			occurences[key/8] &= ~(1 << (key%8));
+			releaseLock(&globalLock);
+#endif
 			s->remove(k,tid);
 		}
 	}
+#ifdef VEB_DEBUG
+	void debug() {
+		bool in_arr, in_tree;
+		for (int i = 0; i < HTMvEBTreeRange; i++) {
+			in_arr = occurences[i/8] & (1 << (i%8));
+			in_tree = s->member(i, 0);
+			if (in_arr != in_tree)
+				printf("k=%d, arr=%d, tree=%d\n", i, (int)in_arr, (int)in_tree);
+		}
+	}
+#endif
 	void cleanup(GlobalTestConfig* gtc){
+#ifdef VEB_DEBUG
+		debug();
+#endif
 		ChurnTest::cleanup(gtc);
 		delete s;
 	}
