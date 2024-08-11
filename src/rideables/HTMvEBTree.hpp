@@ -405,14 +405,6 @@ public:
         return retval;
     }
 
-    bool member(K key, int tid) {
-        bool retval = false;
-        begin_op();
-        TLE(root->member, key);
-        end_op();
-        return retval;
-    }
-
     void initThread(const int tid) {
         Recoverable::init_thread(tid); 
         kMap.clear();
