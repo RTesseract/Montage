@@ -132,6 +132,13 @@ void populate_maps(i64 _u, bool isKV) {
     }
 }
 
+#ifdef VEB_TEST
+#define GET(k) (bitmap[k / 8] & (1 << (k % 8)))
+#define SET(k) (bitmap[k / 8] |= 1 << (k % 8))
+#define CLR(k) (bitmap[k / 8] &= ~(1 << (k % 8)))
+inline char *bitmap;
+#endif /* VEB_TEST */
+
 template <class K>
 class HTMvEBTree : public RSet<K>, public Recoverable {
 public:
@@ -342,6 +349,10 @@ public:
             if (x == this->min || x == this->max) {
                 return true;
             }
+            if (this->u == 2) {
+                // if it's neither min nor max, and we can't recurse any further, we're done
+                return false;
+            }
             UniverseInfo ui = kMap[this->u];
 
             i64 h = HIGH(x, ui);
@@ -352,14 +363,35 @@ public:
 
     Node *root;
 
-    HTMvEBTree(GlobalTestConfig* gtc): Recoverable(gtc), root(new Node(HTMvEBTreeRange, this)) {}
+    HTMvEBTree(GlobalTestConfig* gtc): Recoverable(gtc), root(new Node(HTMvEBTreeRange, this)) {
+#ifdef VEB_TEST
+        bitmap = new char[HTMvEBTreeRange / 8 + 1]();
+#endif /* VEB_TEST */
+    }
 
-    ~HTMvEBTree() { delete root; }
+    ~HTMvEBTree() {
+        delete root;
+#ifdef VEB_TEST
+        delete[] bitmap;
+#endif /* VEB_TEST */
+    }
+
+#ifdef VEB_TEST
+    inline bool _insert(K key) {
+        bool retval = root->insert(key);
+        if (retval) SET(key);
+        return retval;
+    }
+#endif /* VEB_TEST */
 
     bool insert(K key, int tid) {
         bool retval = false;
         begin_op();
+#ifdef VEB_TEST
+        TLE(_insert, key);
+#else
         TLE(root->insert, key);
+#endif /* VEB_TEST */
         end_op();
         // if (retval) {
         //     for (auto it = kToRefill.begin(); it != kToRefill.end(); ++it) {
@@ -373,10 +405,22 @@ public:
         return retval;
     }
 
+#ifdef VEB_TEST
+    inline bool _remove(K key) {
+        bool retval = root->del(key);
+        if (retval) CLR(key);
+        return retval;
+    }
+#endif /* VEB_TEST */
+
     bool remove(K key, int tid) {
         bool retval = false;
         begin_op();
+#ifdef VEB_TEST
+        TLE(_remove, key);
+#else
         TLE(root->del, key);
+#endif /* VEB_TEST */
         end_op();
         // if (retval) {
         //     for (auto it = kToReclaim.begin(); it != kToReclaim.end(); ++it) {
