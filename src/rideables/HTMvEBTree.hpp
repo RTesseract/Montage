@@ -377,9 +377,14 @@ public:
     }
 
 #ifdef VEB_TEST
-    inline bool _insert(K key) {
+    bool _insert(K key) {
         bool retval = root->insert(key);
-        if (retval) SET(key);
+        SET(key);
+        // if (retval) {
+        //     if (!GET(key)) errexit("insert: SET(key) failed");
+        // } else {
+        //     if (!GET(key)) errexit("insert: !GET(key) && already inserted");
+        // }
         return retval;
     }
 #endif /* VEB_TEST */
@@ -406,9 +411,14 @@ public:
     }
 
 #ifdef VEB_TEST
-    inline bool _remove(K key) {
+    bool _remove(K key) {
         bool retval = root->del(key);
-        if (retval) CLR(key);
+        if (retval) {
+            CLR(key);
+            /* if (GET(key)) errexit("remove: CLR(key) failed");
+        } else {
+            if (GET(key)) errexit("remove: GET(key) && already removed"); */
+        }
         return retval;
     }
 #endif /* VEB_TEST */
