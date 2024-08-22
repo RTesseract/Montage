@@ -12,8 +12,8 @@
 #include <immintrin.h>
 #include "GlobalLock.hpp"
 
-#define VEB_TEST
-#if 1
+// #define VEB_TEST
+#if 0
 
 #define MAX_RETRIES 35
 #define PAUSE_COUNT 2
@@ -132,16 +132,42 @@ void populate_maps(i64 _u, bool isKV) {
     }
 }
 
+inline thread_local bool old_see_new;
+inline thread_local deque<void *> pToRetire;
+
 #ifdef VEB_TEST
-#define GET(k) (bitmap[k / 8] & (1 << (k % 8)))
-#define SET(k) (bitmap[k / 8] |= 1 << (k % 8))
-#define CLR(k) (bitmap[k / 8] &= ~(1 << (k % 8)))
 inline char *bitmap;
+
+inline char GET(i64 k) {
+    const char mask = ((char)1) << (k % 8);
+    const char val = bitmap[k / 8] & mask;
+    return val ? 1 : 0;
+}
+
+inline void SET(i64 k) {
+    bitmap[k / 8] = bitmap[k / 8] | (((char)1) << (k % 8));
+}
+
+inline void CLR(i64 k) {
+    bitmap[k / 8] = bitmap[k / 8] & (~(((char)1) << (k % 8)));
+}
 #endif /* VEB_TEST */
+
+#define COMMA ,
 
 template <class K>
 class HTMvEBTree : public RSet<K>, public Recoverable {
 public:
+    class Payload : public pds::PBlk {
+        GENERATE_FIELD(K, key, Payload);
+    public:
+        Payload(K key) : m_key(key) {}
+    };
+
+    inline bool check_epoch(Payload *p) {
+        return this->get_epoch() >= p->get_epoch();
+    }
+
     class Node {
     public:
         i64 u;
@@ -152,12 +178,9 @@ public:
         volatile i64 min;
         volatile i64 max;
         // PAD;
+        Payload *p1, *p2;
 
-        Node(i64 u, HTMvEBTree *ds): ds(ds) {
-            this->u = u;
-            this->min = -1;
-            this->max = -1;
-
+        Node(i64 u, HTMvEBTree *ds): u(u), clusters(nullptr), summary(nullptr), ds(ds), min(-1), max(-1), p1(nullptr), p2(nullptr) {
             if (u == 2) {
             } else {
 
@@ -192,12 +215,14 @@ public:
             }
         }
 
-        void insertToEmptyVEB(i64 x) {
+        void insertToEmptyVEB(i64 x, Payload *p) {
             this->min = x;
             this->max = x;
+            p1 = p;
+            p2 = p;
         }
 
-        bool insert(i64 x) {
+        bool insert(i64 x, Payload *p) {
             // AVOID RE-INSERTING THE MINIMUM OR THE MAXIMUM INSIDE THE CLUSTER
             if (x == this->min || x == this->max) {
                 return false;
@@ -205,7 +230,7 @@ public:
 
             // easy case: tree is empty
             if (this->min == -1) {
-                this->insertToEmptyVEB(x);
+                this->insertToEmptyVEB(x, p);
                 return true;
             }
 
@@ -222,6 +247,10 @@ public:
                 i64 temp = x;
                 x = this->min;
                 this->min = temp;
+
+                Payload *p_temp = p;
+                p = p1;
+                p1 = p_temp;
             }
 
             if (this->u > 2) {
@@ -233,14 +262,14 @@ public:
                 // the corresponding cluster is empty
                 if (this->clusters[h]->min == -1) {
                     // this->allocateSummaryIfNeeded();
-                    this->summary->insert(h);
-                    this->clusters[h]->insertToEmptyVEB(l);
+                    this->summary->insert(h, p);
+                    this->clusters[h]->insertToEmptyVEB(l, p);
                     inserted = true;
                 }
 
                 // the corresponding cluster already has some elements
                 else {
-                    inserted = this->clusters[h]->insert(l);
+                    inserted = this->clusters[h]->insert(l, p);
                 }
             }
 
@@ -250,6 +279,7 @@ public:
                 // inserted = true;
 
                 this->max = x;
+                p2 = p;
             }
             return inserted;
         }
@@ -263,8 +293,17 @@ public:
             // rare
             if (this->min == this->max) {
                 if (this->min == x) {
+                    if (!p1 || !p2) errexit("del: !p1 || !p2");
+                    else if (p1 != p2) errexit("del: p1 != p2");
+                    if (!ds->check_epoch(p1)) {
+                        old_see_new = true;
+                        return false;
+                    }
                     this->min = -1;
                     this->max = -1;
+                    pToRetire.push_back(p1);
+                    p1 = nullptr;
+                    p2 = nullptr;
                     return true;
                 }
                 // else {
@@ -279,9 +318,27 @@ public:
                 // we're at the base case
                 // one of them must be x
                 // delete it and set min and max accordingly
-                this->min = 1 - x;
-                this->max = this->min;
-
+                if (!p1 || !p2) errexit("del: !p1 || !p2 (#2)");
+                else if (p1 == p2) errexit("del: p1 == p2");
+                if (!x) {
+                    if (!ds->check_epoch(p1)) {
+                        old_see_new = true;
+                        return false;
+                    }
+                    this->min = 1 - x;
+                    this->max = this->min;
+                    pToRetire.push_back(p1);
+                    p1 = p2;
+                } else {
+                    if (!ds->check_epoch(p2)) {
+                        old_see_new = true;
+                        return false;
+                    }
+                    this->min = 1 - x;
+                    this->max = this->min;
+                    pToRetire.push_back(p2);
+                    p2 = p1;
+                }
                 return true;
             }
 
@@ -291,11 +348,16 @@ public:
             // if deleting the min value,
             // set one of the elems as the new min
             // delete that element from inside the cluster
+            i64 min_tmp = this->min;
+            Payload *p1_tmp = p1, *p2_temp = p2;
             if (x == this->min) {
                 // no need to do nullptr check on summary because if there are at least 2 elements in the structure, the summary has been allocated
                 i64 firstCluster = this->summary->min;
                 x = INDEX(firstCluster, this->clusters[firstCluster]->min, ui);
-                this->min = x;
+                // this->min = x;
+                // p1 = this->clusters[firstCluster]->p1;
+                min_tmp = x;
+                p1_tmp = this->clusters[firstCluster]->p1;
             }
 
             i64 h = HIGH(x, ui);
@@ -304,6 +366,10 @@ public:
             bool erased;
             // now delete x from the cluster
             erased = this->clusters[h]->del(l);
+            if (!erased && old_see_new)
+                return false;
+            else if (erased && old_see_new)
+                errexit("del: erased && old_see_new");
 
             // if successfully deleted x and the cluster is empty now
             if (this->clusters[h]->min == -1) {
@@ -313,7 +379,17 @@ public:
                 // this->clusters[h] = nullptr;  // absence of this line causes segfaults
 
                 // update summary so that it reflects the emptiness
-                this->summary->del(h);
+                erased = this->summary->del(h);
+                if (!erased && old_see_new)
+                    return false;
+                else if (erased && old_see_new)
+                    errexit("del: erased && old_see_new");
+                if (p1_tmp != p1) {
+                    if (min == min_tmp) errexit("del: min == min_tmp (#1)");
+                    min = min_tmp;
+                    pToRetire.push_back(p1);
+                    p1 = p1_tmp;
+                }
 
                 // if we deleted the max element, we need to find the new max
                 if (x == this->max) {
@@ -321,9 +397,21 @@ public:
 
                     // only 1 elem remaining
                     if (summaryMax == -1) {
+                        if (!ds->check_epoch(p2)) {
+                            old_see_new = true;
+                            return false;
+                        }
                         this->max = this->min;
+                        pToRetire.push_back(p2);
+                        p2 = p1;
                     } else {
+                        if (!ds->check_epoch(p2)) {
+                            old_see_new = true;
+                            return false;
+                        }
                         this->max = INDEX(summaryMax, this->clusters[summaryMax]->max, ui);
+                        pToRetire.push_back(p2);
+                        p2 = this->clusters[summaryMax]->p2;
                     }
                 }
 
@@ -340,15 +428,38 @@ public:
             // the erased check is not necessary
             // if it's equal to max, it's been deleted
             else if (x == this->max) {
+                if (p1_tmp != p1) {
+                    if (min == min_tmp) errexit("del: min == min_tmp (#2)");
+                    min = min_tmp;
+                    pToRetire.push_back(p1);
+                    p1 = p1_tmp;
+                }
+                if (!ds->check_epoch(p2)) {
+                    old_see_new = true;
+                    return false;
+                }
                 this->max = INDEX(h, this->clusters[h]->max, ui);
+                pToRetire.push_back(p2);
+                p2 = this->clusters[h]->p2;
+            } else {
+                if (p1_tmp != p1) {
+                    if (min == min_tmp) errexit("del: min == min_tmp (#3)");
+                    min = min_tmp;
+                    pToRetire.push_back(p1);
+                    p1 = p1_tmp;
+                }
             }
             return erased;
         }
 
-        bool member(i64 x) {
-            if (x == this->min || x == this->max) {
-                return true;
-            }
+        bool member(i64 x, i64 key) {
+            // if (x == this->min || x == this->max) {
+            if (p1 && p2) {
+                if (key == p1->get_key(ds) || key == p2->get_key(ds)) {
+                    return true;
+                }
+            } else if (!p1 ^ !p2)
+                errexit("member: p1 ^ p2");
             if (this->u == 2) {
                 // if it's neither min nor max, and we can't recurse any further, we're done
                 return false;
@@ -357,7 +468,7 @@ public:
 
             i64 h = HIGH(x, ui);
 
-            return this->clusters[h]->member(LOW(x, ui));
+            return this->clusters[h]->member(LOW(x, ui), key);
         }
     };
 
@@ -366,6 +477,8 @@ public:
     HTMvEBTree(GlobalTestConfig* gtc): Recoverable(gtc), root(new Node(HTMvEBTreeRange, this)) {
 #ifdef VEB_TEST
         bitmap = new char[HTMvEBTreeRange / 8 + 1]();
+        for (i64 i = 0; i < HTMvEBTreeRange / 8 + 1; ++i)
+            bitmap[i] = 0;
 #endif /* VEB_TEST */
     }
 
@@ -377,14 +490,14 @@ public:
     }
 
 #ifdef VEB_TEST
-    bool _insert(K key) {
-        bool retval = root->insert(key);
-        SET(key);
-        // if (retval) {
-        //     if (!GET(key)) errexit("insert: SET(key) failed");
-        // } else {
-        //     if (!GET(key)) errexit("insert: !GET(key) && already inserted");
-        // }
+    bool _insert(K key, Payload *p) {
+        bool retval = root->insert(key, p);
+        if (retval) {
+            SET(key);
+            if (!GET(key)) errexit("insert: SET(key) failed");
+        } else {
+            if (!GET(key)) errexit("insert: !GET(key) && already inserted");
+        }
         return retval;
     }
 #endif /* VEB_TEST */
@@ -392,11 +505,13 @@ public:
     bool insert(K key, int tid) {
         bool retval = false;
         begin_op();
+        Payload *p = pnew<Payload>(key);
 #ifdef VEB_TEST
-        TLE(_insert, key);
+        TLE(_insert, key COMMA p);
 #else
-        TLE(root->insert, key);
+        TLE(root->insert, key COMMA p);
 #endif /* VEB_TEST */
+        if (!retval) pdelete(p);
         end_op();
         // if (retval) {
         //     for (auto it = kToRefill.begin(); it != kToRefill.end(); ++it) {
@@ -415,9 +530,10 @@ public:
         bool retval = root->del(key);
         if (retval) {
             CLR(key);
-            /* if (GET(key)) errexit("remove: CLR(key) failed");
+            if (GET(key)) errexit("remove: CLR(key) failed");
+            return retval;
         } else {
-            if (GET(key)) errexit("remove: GET(key) && already removed"); */
+            if (GET(key)) errexit("remove: GET(key) && already removed");
         }
         return retval;
     }
@@ -425,13 +541,26 @@ public:
 
     bool remove(K key, int tid) {
         bool retval = false;
+remove_retry:
+        retval = false;
+        old_see_new = false;
+        pToRetire.clear();
         begin_op();
 #ifdef VEB_TEST
         TLE(_remove, key);
 #else
         TLE(root->del, key);
 #endif /* VEB_TEST */
-        end_op();
+        if (!retval && old_see_new) {
+            abort_op();
+            goto remove_retry;
+        } else if (retval && old_see_new)
+            errexit("retval && old_see_new");
+        else {
+            // for (const void *p : pToRetire) pretire((Payload *)p);
+            end_op();
+        }
+
         // if (retval) {
         //     for (auto it = kToReclaim.begin(); it != kToReclaim.end(); ++it) {
         //         Node *temp = (Node *)*it;
@@ -450,7 +579,7 @@ public:
     bool member(K key, int tid) {
         bool retval = false;
         begin_op();
-        TLE(root->member, key);
+        TLE(root->member, key COMMA key);
         end_op();
         return retval;
     }

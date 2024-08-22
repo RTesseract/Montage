@@ -87,6 +87,9 @@ public:
     bool check_epoch(uint64_t c){
         return _esys->check_epoch(c);
     }
+    inline uint64_t get_epoch() {
+        return _esys->get_epoch();
+    }
     void begin_op(){
         assert(epochs[pds::EpochSys::tid].ui == NULL_EPOCH);
         epochs[pds::EpochSys::tid].ui = _esys->begin_transaction();
